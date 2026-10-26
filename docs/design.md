@@ -9,6 +9,8 @@ Feel: Apple Maps. The map is the screen. Text is minimal and navigation is obvio
 - Full-bleed map. One bottom sheet. One primary action per screen.
 - Fewest words. Numbers over sentences.
 - Sun and shade are never told by color alone.
+- Amber and teal are data colors for sun and shade only. The blue is the only interface accent.
+- Text never uses amber on a light surface. Numbers stay ink.
 - The accuracy label is always visible on a route. See [decisions/002-honest-data-labels.md](decisions/002-honest-data-labels.md).
 
 ## Layout
@@ -33,13 +35,15 @@ Feel: Apple Maps. The map is the screen. Text is minimal and navigation is obvio
 - Card: total time, minutes in sun (largest number), a shade strip, and the badge "Building-only estimate, no trees".
 - Shade strip: one bar for the route length. Shaded stretches are solid teal. Sunny stretches are amber with a diagonal hatch.
 - Selected route is drawn on the map with its shadows. Tapping another card swaps it in under 200 ms.
-- Primary action: "Start".
+- Under the cards, a slim time scrubber on the 30 minute slot grid. It starts at the chosen departure and snaps to Now. Dragging it recolors the shade strip and the shadows from precomputed slots, with no new fetch. Outside the precomputed slots it stops at the nearest one.
+- Primary action: "Start". "Leave now" and the other chips are secondary.
 
 ### In-route
 
 - Camera follows the position. 3D pitches behind the walker. 2D is heading up.
 - Top banner: next turn and distance.
 - Sheet at peek: minutes left, minutes in sun left, and "End".
+- Sheet text is 15 or larger. Minutes in sun stays at 34.
 - Off route: banner "Off route" with the action "Reroute", which reruns the router from the current position.
 - Does not recompute shade live. It uses the slot of the departure time, shifted by elapsed time.
 
@@ -95,6 +99,8 @@ All strings, exact. No em dashes.
 - Spacing: 4 point grid.
 - Motion: sheet and camera use a spring of about 300 ms. Honor reduced motion.
 - Touch targets: 44 px or larger.
+- Contrast: text 4.5 to 1 or better against its surface. Amber and teal are for lines and fills, checked against the map in both modes on the first render.
+- Dark mode data colors are proposals: lift teal and amber one step lighter and lower shadow opacity. Unverified until rendered.
 - Dark mode follows the system.
 
 ## Focus and keyboard
