@@ -45,6 +45,7 @@ export type BuildInput = {
   now?: Date;
   extraNotes?: readonly string[];
   places?: readonly { name: string; at: LngLat }[];
+  land?: readonly { kind: "park" | "water"; id: string; ring: readonly LngLat[] }[];
 };
 
 export async function buildArea(input: BuildInput): Promise<BuildReport> {
@@ -104,7 +105,7 @@ export async function buildArea(input: BuildInput): Promise<BuildReport> {
     interpolation: shaded.interpolation,
     basemap: "basemap.geojson",
     notes: [
-      "Basemap is basemap.geojson, one static GeoJSON file of the walking graph and building footprints. It is not a PMTiles or MVT archive.",
+      "Basemap is basemap.geojson, one static GeoJSON file of the walking graph, building footprints, and OpenStreetMap parks and water. It is not a PMTiles or MVT archive.",
       "Covered edges are covered=yes, tunnel=building_passage, or a covered override. coveredYesEdges is the covered=yes subset and matches the measure's definition. Bridge edges are a bridge tag other than no or false, or a bridge override. Either covered or bridge is sun fraction 0 in every slot.",
       "Heights use shadeModel.estimateHeight: OSM height, then building:levels times 3.74 m, then the raster median, then default 3.74 m. A height override replaces that result and is source override. Shadow casters are Overture building rows and building_part rows with centroid in the box; a multipolygon is one caster per polygon. The raster median samples about every 4 m, so a footprint the 0.5 m presence test still hits can fall through to default.",
       `Interpolation error is the mean absolute sun-fraction difference at ${interpolationCheck.minutes} minutes on ${interpolationCheck.date} Asia/Manila, on edges that are not forced to full shade, between a direct shadeModel run and shadeModel.interpolateSunFraction of the three reference days.`,
@@ -119,7 +120,12 @@ export async function buildArea(input: BuildInput): Promise<BuildReport> {
   await writeFile(`${input.outDir}/build-report.json`, `${JSON.stringify(report, null, 2)}\n`);
   await writeFile(
     `${input.outDir}/basemap.geojson`,
-    basemapGeoJson({ bbox, edges: graph.edges, buildings: casters.casters }),
+    basemapGeoJson({
+      bbox,
+      edges: graph.edges,
+      buildings: casters.casters,
+      ...(input.land === undefined ? {} : { land: input.land }),
+    }),
   );
   await writeFile(
     `${input.outDir}/places.json`,

@@ -84,14 +84,19 @@ export const UI_STYLES = `
   transition: height var(--motion-sheet) ease;
   pointer-events: auto;
   max-height: var(--sheet-full);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .shadeway-sheet[data-detent="peek"] {
   height: var(--sheet-peek);
 }
 
+.shadeway-sheet[data-screen="search"][data-detent="peek"] {
+  height: calc(268px + env(safe-area-inset-bottom, 0px));
+}
+
 .shadeway-sheet[data-screen="in-route"][data-detent="peek"] {
-  height: 152px;
+  height: calc(196px + env(safe-area-inset-bottom, 0px));
 }
 
 .shadeway-sheet[data-detent="half"] {
@@ -100,6 +105,29 @@ export const UI_STYLES = `
 
 .shadeway-sheet[data-detent="full"] {
   height: var(--sheet-full);
+}
+
+@media (min-width: 900px) {
+  .shadeway-sheet {
+    left: 16px;
+    right: auto;
+    width: 420px;
+    bottom: 16px;
+    border-radius: var(--radius-sheet);
+  }
+
+  .shadeway-sheet[data-detent="half"],
+  .shadeway-sheet[data-detent="full"] {
+    top: 16px;
+    height: auto;
+  }
+
+  .in-route-banner {
+    left: 452px;
+    right: 148px;
+    top: 16px;
+    font-size: 22px;
+  }
 }
 
 .sheet-grabber {
@@ -121,8 +149,24 @@ export const UI_STYLES = `
 
 .sheet-body {
   flex: 1;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   padding: 0 var(--space-4) var(--space-4);
+}
+
+.compare-screen {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.search-screen {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .search-field {
@@ -141,6 +185,18 @@ export const UI_STYLES = `
   flex-wrap: wrap;
   gap: var(--space-2);
   margin-top: var(--space-3);
+}
+
+.search-screen .chip-row {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.search-screen .chip {
+  width: 100%;
+  text-align: left;
+  border-radius: var(--radius-card);
+  font-size: var(--text-17);
 }
 
 .chip {
@@ -173,6 +229,9 @@ export const UI_STYLES = `
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .route-card {
@@ -181,6 +240,7 @@ export const UI_STYLES = `
   padding: var(--space-3);
   background: color-mix(in srgb, var(--color-surface) 70%, transparent);
   min-height: var(--touch-min);
+  flex-shrink: 0;
   text-align: left;
   width: 100%;
   cursor: pointer;
@@ -364,22 +424,34 @@ export const UI_STYLES = `
   border-radius: var(--radius-card);
   background: var(--color-surface);
   backdrop-filter: blur(16px);
-  font-size: var(--text-15);
+  font-size: 22px;
+  font-weight: 600;
   pointer-events: auto;
 }
 
 .in-route-sheet__row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
   font-size: var(--text-15);
 }
 
+.in-route-sheet__row p {
+  margin: 0;
+}
+
 .in-route-sheet__sun {
   font-size: var(--text-34);
   font-weight: 600;
+  line-height: 1.15;
   color: var(--color-ink);
+}
+
+.in-route-sheet__label {
+  margin-top: var(--space-1);
+  font-size: var(--text-13);
+  color: var(--color-text-secondary);
 }
 
 .sr-only {

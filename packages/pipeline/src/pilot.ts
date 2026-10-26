@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { buildArea, type BuildReport } from "./build.js";
 import { bgcBox, googleImageryEnd, googleImageryStart, googleInferenceDate, googleManifestUrl, googleTileUrl } from "./config.js";
-import { fetchNamedPlaces, fetchOsm } from "./osm.js";
+import { fetchLandcover, fetchNamedPlaces, fetchOsm } from "./osm.js";
 import { curatePlaces, placesFromWays } from "./places.js";
 import { loadOverrides } from "./overrides.js";
 import { loadShadeFootprints } from "./overture.js";
@@ -25,6 +25,11 @@ export async function buildPilot(cacheDir: string, outDir: string, overridesPath
     console.error(`pilot places skipped: ${message}`);
     return [];
   });
+  const land = await fetchLandcover(bgcBox).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`pilot landcover skipped: ${message}`);
+    return [];
+  });
   const places = curatePlaces([
     { places: named.map((place) => ({ name: place.name, at: [place.lon, place.lat] as const })), rank: 100 },
     { places: placesFromWays(osm.ways), rank: 40 },
@@ -40,6 +45,7 @@ export async function buildPilot(cacheDir: string, outDir: string, overridesPath
     outDir,
     rasterHeight: (record) => rasterFor(record, grid),
     places,
+    land,
     extraNotes: [
       `OpenStreetMap from ${osm.endpoint}, timestamp ${osm.osmTimestamp}.`,
       `Google height raster ${googleTileUrl} manifest ${googleManifestUrl} inference ${googleInferenceDate} imagery ${googleImageryStart} to ${googleImageryEnd}. Median of samples about 4 m apart inside the footprint.`,

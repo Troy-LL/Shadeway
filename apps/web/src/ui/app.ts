@@ -1,10 +1,12 @@
-import { isSlotIndex, slotStartMinutes, type LngLat } from "@shadeway/contract";
+import { isSlotIndex, slotStartMinutes, type LngLat, type SlotIndex } from "@shadeway/contract";
 import { shadeModel } from "@shadeway/shade-model";
 import { MAP_SUN_DATE, type MapController } from "../map/controller";
 import type { PilotData } from "../map/pilot";
 import { attachSheetKeyboard } from "./bottom-sheet";
+import { COPY, formatMinutes, formatMinutesInSun } from "./copy";
 import { createNoopMapController } from "./controller-stub";
 import { createRouteClient, nearestNode, type RouteClient } from "./route-client";
+import { slotAfterElapsed, walkRemaining } from "./progress";
 import { cardsFromResults } from "./route-model";
 import { moveRouteSelection, renderCompareContent } from "./screens/compare";
 import { renderInRouteBanner, renderInRouteContent } from "./screens/in-route";
@@ -56,6 +58,9 @@ export function createUiApp(
   let routeGeneration = 0;
   let framed = "";
   let offPoint: LngLat | null = null;
+  let walkTimer = 0;
+  let walkStarted = 0;
+  let walkBase: { durationS: number; distanceM: number; sunMinutes: number; slot: SlotIndex } | null = null;
 
   const shell = document.createElement("div");
   shell.className = "shadeway-ui";
@@ -107,7 +112,7 @@ export function createUiApp(
     if (state.screen === "in-route") {
       bannerHost.append(
         renderInRouteBanner(state, {
-          onEnd: () => setState({ screen: "search", detent: "peek", offRoute: false }),
+          onEnd: endTrip,
           onReroute: () => {
             if (live && state.start && state.end && offPoint) {
               void routeBetween(state.start, state.end, offPoint);
@@ -119,7 +124,7 @@ export function createUiApp(
       );
       body.append(
         renderInRouteContent(state, {
-          onEnd: () => setState({ screen: "search", detent: "peek", offRoute: false }),
+          onEnd: endTrip,
           onReroute: () => {
             if (live && state.start && state.end && offPoint) {
               void routeBetween(state.start, state.end, offPoint);
@@ -160,6 +165,7 @@ export function createUiApp(
           },
           onStart: () => {
             const selected = state.routes.find((route) => route.weight === state.selectedWeight);
+            if (live && selected) beginWalk(selected, state.slot);
             setState({
               screen: "in-route",
               detent: "peek",
@@ -211,6 +217,7 @@ export function createUiApp(
   };
 
   const setState = (patch: Partial<UiState>) => {
+    if (state.screen === "in-route" && patch.screen !== undefined && patch.screen !== "in-route") stopWalk();
     let next: UiState = { ...state, ...patch };
     if (!live && patch.slot !== undefined && isSlotIndex(patch.slot) && patch.routes === undefined) {
       next = { ...next, routes: applySegmentsForSlot(next.routes, patch.slot) };
@@ -223,10 +230,73 @@ export function createUiApp(
     }
   };
 
+  function endTrip(): void {
+    map.setStartMarker(null);
+    map.setEndMarker(null);
+    map.setPilotBox(false);
+    setState({
+      screen: "search",
+      detent: "peek",
+      offRoute: false,
+      start: null,
+      end: null,
+      status: "normal",
+      routes: [],
+    });
+  }
+
+  function beginWalk(card: RouteCardModel, slot: SlotIndex): void {
+    stopWalk();
+    walkBase = {
+      durationS: Math.max(card.totalMinutes, 1) * 60,
+      distanceM: card.distanceM,
+      sunMinutes: card.sunMinutes,
+      slot,
+    };
+    walkStarted = performance.now();
+    map.setFollowFraction(0);
+    walkTimer = window.setInterval(tickWalk, 1000);
+  }
+
+  function stopWalk(): void {
+    if (walkTimer) window.clearInterval(walkTimer);
+    walkTimer = 0;
+    walkBase = null;
+  }
+
+  function tickWalk(): void {
+    const base = walkBase;
+    if (!base || state.screen !== "in-route" || state.offRoute) return;
+    const elapsedS = (performance.now() - walkStarted) / 1000;
+    const left = walkRemaining(elapsedS, base.durationS, base.distanceM, base.sunMinutes);
+    const slot = slotAfterElapsed(base.slot, elapsedS);
+    const line = lineFor("", left.distanceM);
+    map.setFollowFraction(left.fraction);
+    const banner = bannerHost.querySelector(".in-route-banner");
+    const minutesEl = body.querySelector(".in-route-screen p:not(.in-route-sheet__sun):not(.in-route-sheet__label)");
+    const sunEl = body.querySelector(".in-route-sheet__sun");
+    const previous = state.slot;
+    state = {
+      ...state,
+      minutesRemaining: left.minutes,
+      sunMinutesRemaining: left.sunMinutes,
+      navigationLine: line,
+      slot,
+    };
+    if (banner && minutesEl && sunEl) {
+      banner.textContent = line;
+      minutesEl.textContent = formatMinutes(left.minutes);
+      sunEl.textContent = formatMinutesInSun(left.sunMinutes);
+      if (slot !== previous) map.setSlot(slot);
+      return;
+    }
+    render();
+    syncMap();
+  }
+
   function lineFor(name: string, distanceM: number): string {
-    const meters = `${Math.round(distanceM)} m`;
-    if (!name || /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(name)) return meters;
-    return `${name} · ${meters}`;
+    void name;
+    return `${COPY.keepGoing} · ${Math.round(distanceM)} m`;
   }
 
   function inside(pilot: PilotData, point: LngLat): boolean {
@@ -239,7 +309,7 @@ export function createUiApp(
     if (!pilot) return;
     if (!inside(pilot, place.at)) {
       map.setPilotBox(true);
-      setState({ status: "outside-pilot", screen: "compare", detent: "half" });
+      setState({ status: "outside-pilot", screen: "search", detent: "half" });
       return;
     }
     map.setPilotBox(false);
@@ -280,7 +350,9 @@ export function createUiApp(
       if (generation !== routeGeneration) return;
       const cards = cardsFromResults(routed, pilot.graph, pilot.tiles);
       if (cards.length === 0) {
-        setState({ status: "no-route", routes: [], screen: "compare", detent: "half" });
+        map.setStartMarker(null);
+        map.setEndMarker(null);
+        setState({ status: "no-route", routes: [], screen: "search", detent: "half", start: null, end: null });
         return;
       }
       const sun = shadeModel.sunPosition(departure, origin);
@@ -301,6 +373,7 @@ export function createUiApp(
         offRoute: false,
         recents: [end.name, ...state.recents.filter((name) => name !== end.name)].slice(0, 4),
       });
+      if (screen === "in-route") beginWalk(picked, slot);
       document.documentElement.dataset.route = "ready";
     } catch {
       if (generation !== routeGeneration) return;

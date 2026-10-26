@@ -1,4 +1,4 @@
-import { COPY, formatMinutes, formatMinutesInSun } from "../copy";
+import { COPY, ROUTE_ESTIMATE_LABEL, formatMinutes, formatMinutesInSun } from "../copy";
 import type { UiState } from "../types";
 
 export interface InRouteHandlers {
@@ -32,12 +32,18 @@ export function renderInRouteContent(state: UiState, handlers: InRouteHandlers):
   container.className = "in-route-screen in-route-sheet__row";
 
   const left = document.createElement("div");
+  const badge = document.createElement("span");
+  badge.className = "confidence-badge";
+  badge.textContent = "Estimate";
   const minutes = document.createElement("p");
   minutes.textContent = formatMinutes(state.minutesRemaining);
   const sun = document.createElement("p");
   sun.className = "in-route-sheet__sun";
   sun.textContent = formatMinutesInSun(state.sunMinutesRemaining);
-  left.append(minutes, sun);
+  const label = document.createElement("p");
+  label.className = "in-route-sheet__label";
+  label.textContent = ROUTE_ESTIMATE_LABEL;
+  left.append(badge, minutes, sun, label);
 
   const end = document.createElement("button");
   end.type = "button";

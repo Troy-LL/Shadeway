@@ -17,11 +17,15 @@ describe("UI screen states", () => {
 });
 
 describe("Compare route cards", () => {
-  it("lists Shadiest, Balanced, Fastest with the estimate label on each", () => {
+  it("lists Fastest, Balanced, Shadiest with sun minutes ahead of total time", () => {
     const root = renderUiStateById("compare-default");
     document.body.append(root);
     const titles = [...root.querySelectorAll(".route-card__title")].map((el) => el.textContent);
-    expect(titles).toEqual([COPY.shadiest, COPY.balanced, COPY.fastest]);
+    expect(titles).toEqual([COPY.fastest, COPY.balanced, COPY.shadiest]);
+    const card = root.querySelector(".route-card");
+    const sun = card?.querySelector(".route-card__sun");
+    const total = card?.querySelector(".route-card__total");
+    expect(sun && total && (sun.compareDocumentPosition(total) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTruthy();
     const badges = root.querySelectorAll(".route-card__badge");
     expect(badges.length).toBe(3);
     for (const badge of badges) {
@@ -75,6 +79,35 @@ describe("Status copy", () => {
 });
 
 describe("Search", () => {
+  it("shows the estimate badge and the building-only label in route", () => {
+    const root = renderUiStateById("in-route-peek");
+    document.body.append(root);
+    expect(root.querySelector(".in-route-screen .confidence-badge")?.textContent).toBe("Estimate");
+    expect(root.textContent).toContain(ROUTE_ESTIMATE_LABEL);
+    expect(root.textContent).toContain("min in sun");
+    expect(root.textContent).toContain(COPY.keepGoing);
+    document.body.replaceChildren();
+  });
+
+  it("ranks the pilot chips ahead of other name matches", () => {
+    const root = renderUiState(
+      defaultUiState({
+        screen: "search",
+        detent: "half",
+        query: "boni",
+        places: [
+          { name: "Area Formerly Occupied by Fort Bonifacio Museum", at: [121.05, 14.55] },
+          { name: "Bonifacio High Street", at: [121.05, 14.551] },
+          { name: "Bonifacio South Street", at: [121.049, 14.549] },
+        ],
+      }),
+    );
+    document.body.append(root);
+    const suggestions = [...root.querySelectorAll(".suggest__option")].map((el) => el.textContent);
+    expect(suggestions[0]).toBe("Bonifacio High Street");
+    document.body.replaceChildren();
+  });
+
   it("filters named places from the query", () => {
     const root = renderUiState(
       defaultUiState({
@@ -98,6 +131,16 @@ describe("Search", () => {
     document.body.append(root);
     const field = root.querySelector<HTMLInputElement>(".search-field");
     expect(field?.placeholder).toBe(COPY.whereTo);
+    expect(root.textContent).toContain("Bonifacio High Street");
+    expect(root.textContent).toContain("Market! Market!");
+    expect(root.textContent).not.toContain(COPY.leaveNow);
+    document.body.replaceChildren();
+  });
+
+  it("keeps Leave now on the full sheet", () => {
+    const root = renderUiStateById("search-full");
+    document.body.append(root);
+    expect(root.textContent).toContain(COPY.leaveNow);
     document.body.replaceChildren();
   });
 });

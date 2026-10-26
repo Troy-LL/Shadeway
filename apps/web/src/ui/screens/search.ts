@@ -12,10 +12,22 @@ export interface SearchHandlers {
   readonly onSnapNow: () => void;
 }
 
+const PILOT_RANK = new Map<string, number>([
+  [PILOT_DESTINATIONS.bonifacioHighStreet.toLowerCase(), 0],
+  [PILOT_DESTINATIONS.marketMarket.toLowerCase(), 1],
+]);
+
 export function matchPlaces(places: readonly PlacePick[], query: string): readonly PlacePick[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
-  return places.filter((place) => place.name.toLowerCase().includes(needle)).slice(0, 6);
+  return places
+    .filter((place) => place.name.toLowerCase().includes(needle))
+    .sort((a, b) => rankPlace(a.name) - rankPlace(b.name) || a.name.localeCompare(b.name))
+    .slice(0, 6);
+}
+
+function rankPlace(name: string): number {
+  return PILOT_RANK.get(name.toLowerCase()) ?? 2;
 }
 
 export function renderSearchContent(state: UiState, handlers: SearchHandlers): HTMLElement {
@@ -23,10 +35,11 @@ export function renderSearchContent(state: UiState, handlers: SearchHandlers): H
   container.className = "search-screen";
 
   const status = renderStatusBlock(state);
-  if (status) {
+  if (status && state.status !== "no-route" && state.status !== "outside-pilot") {
     container.append(status);
     return container;
   }
+  if (status) container.append(status);
 
   if (state.start) {
     const from = document.createElement("p");
@@ -67,28 +80,29 @@ export function renderSearchContent(state: UiState, handlers: SearchHandlers): H
     container.append(list);
   }
 
-  if (state.detent !== "peek") {
-    const chips = document.createElement("div");
-    chips.className = "chip-row";
+  const chips = document.createElement("div");
+  chips.className = "chip-row";
+  for (const label of [PILOT_DESTINATIONS.bonifacioHighStreet, PILOT_DESTINATIONS.marketMarket]) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.textContent = label;
+    chip.addEventListener("click", () => handlers.onDestination(label));
+    chips.append(chip);
+  }
+  container.append(chips);
 
-    for (const label of [PILOT_DESTINATIONS.bonifacioHighStreet, PILOT_DESTINATIONS.marketMarket]) {
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "chip";
-      chip.textContent = label;
-      chip.addEventListener("click", () => handlers.onDestination(label));
-      chips.append(chip);
-    }
-
+  if (state.detent === "full") {
+    const extra = document.createElement("div");
+    extra.className = "chip-row";
     const leaveNow = document.createElement("button");
     leaveNow.type = "button";
     leaveNow.className = "chip";
     leaveNow.textContent = COPY.leaveNow;
     leaveNow.setAttribute("data-action", "leave-now");
     leaveNow.addEventListener("click", handlers.onLeaveNow);
-    chips.append(leaveNow);
-
-    container.append(chips);
+    extra.append(leaveNow);
+    container.append(extra);
 
     if (state.timePickerOpen) {
       container.append(

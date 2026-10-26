@@ -19,7 +19,7 @@ Verdict: Shadeway reports no time in sun because the way is tagged covered. unde
 
 Pilot ends: 121.04862, 14.55148 and 121.05303, 14.55012. The pipeline note is the tree-lined pedestrian High Street.
 
-Shadeway: Fastest and Balanced are the same walk, 8 min, 8 min in sun, 683 m, 41 edges. Shadiest is 13 min, 7 min in sun, 1050 m, 40 edges.
+Shadeway: Fastest is 6 min, 6 min in sun, 518 m, 38 edges. Balanced is 7 min, 5 min in sun, 579 m, 36 edges. Shadiest is 9 min, 4 min in sun, 784 m, 36 edges. Walking edges are used in both directions.
 
 undercover.ph: Harlan + Holden Coffee (about 9 m from the start) to Seda BGC (about 82 m from the end).
 
@@ -27,7 +27,7 @@ undercover.ph: Harlan + Holden Coffee (about 9 m from the start) to Seda BGC (ab
 - Recommended: 10 min, 620 m, 5.3 min in sun, 44% shaded. Building shade 42%, tree shade 2%.
 - Most shaded: 12 min, 770 m, 3.9 min in sun, 67% shaded. Building shade 63%, tree shade 5%.
 
-Verdict: The shortest walks agree that this street is mostly in the sun at noon (Shadeway 8 of 8 minutes, undercover.ph 8 of 9). Shadeway's shadier walk saves 1 minute of sun and adds 5 minutes of walking, from buildings only. undercover.ph's most shaded walk cuts sun from 8 minutes to 3.9 and attributes part of the cover to trees. On this pair, undercover.ph is the more shaded recommendation. Shadeway does not claim tree shade.
+Verdict: The shortest walks agree that this street is mostly in the sun at noon (Shadeway 6 of 6 minutes, undercover.ph 8 of 9). Shadeway's shadier walk saves 2 minutes of sun and adds 3 minutes of walking, from buildings only. undercover.ph's most shaded walk cuts sun from 8 minutes to 3.9 and attributes part of the cover to trees. On this pair, undercover.ph is the more shaded recommendation. Shadeway does not claim tree shade.
 
 ## uptown-footbridge
 

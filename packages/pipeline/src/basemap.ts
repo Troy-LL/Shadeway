@@ -1,9 +1,10 @@
-import { ATTRIBUTION, type BBox, type Building, type Edge } from "@shadeway/contract";
+import { ATTRIBUTION, type BBox, type Building, type Edge, type LngLat } from "@shadeway/contract";
 
 export function basemapGeoJson(input: {
   bbox: BBox;
   edges: readonly Edge[];
   buildings: readonly Building[];
+  land?: readonly { kind: "park" | "water"; id: string; ring: readonly LngLat[] }[];
 }): string {
   const features = [
     ...input.edges.map((edge) => ({
@@ -36,6 +37,17 @@ export function basemapGeoJson(input: {
         },
       ];
     }),
+    ...(input.land ?? []).flatMap((area) => {
+      const ring = closeRing(area.ring);
+      if (ring.length < 4) return [];
+      return [
+        {
+          type: "Feature",
+          properties: { kind: area.kind, id: area.id },
+          geometry: { type: "Polygon", coordinates: [ring] },
+        },
+      ];
+    }),
   ];
   return JSON.stringify({
     type: "FeatureCollection",
@@ -43,4 +55,12 @@ export function basemapGeoJson(input: {
     bbox: input.bbox,
     features,
   });
+}
+
+function closeRing(ring: readonly LngLat[]): LngLat[] {
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (!first || !last) return [...ring];
+  if (first[0] === last[0] && first[1] === last[1]) return [...ring];
+  return [...ring, first];
 }

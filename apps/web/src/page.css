@@ -2,7 +2,7 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: #e7e1d6;
+  background: #f3efe8;
 }
 
 @media (prefers-color-scheme: dark) {

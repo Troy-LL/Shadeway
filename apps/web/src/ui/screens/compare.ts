@@ -55,6 +55,9 @@ export function renderCompareContent(state: UiState, handlers: CompareHandlers):
   }
 
   container.append(group);
+  queueMicrotask(() => {
+    group.querySelector("[aria-checked='true']")?.scrollIntoView({ block: "nearest" });
+  });
 
   if (state.status === "normal" || state.status === "night") {
     container.append(
@@ -112,14 +115,14 @@ function renderRouteCard(
   estimate.className = "route-card__badge";
   estimate.textContent = ROUTE_ESTIMATE_LABEL;
 
-  card.append(badge, title);
+  card.append(badge, sun, title);
   if (route.note) {
     const note = document.createElement("p");
     note.className = "route-card__note";
     note.textContent = route.note;
     card.append(note);
   }
-  card.append(total, sun, strip, estimate);
+  card.append(total, strip, estimate);
   return card;
 }
 

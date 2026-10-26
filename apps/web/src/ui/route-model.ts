@@ -16,7 +16,7 @@ import { shadeModel } from "@shadeway/shade-model";
 import { COPY } from "./copy";
 import type { RouteCardModel, ShadeSegment } from "./types";
 
-const CARD_ORDER: readonly RouteWeight[] = ["shadiest", "balanced", "fastest"];
+const CARD_ORDER: readonly RouteWeight[] = ["fastest", "balanced", "shadiest"];
 
 export function cardsFromResults(
   routes: Readonly<Record<RouteWeight, RouteResult | null>>,

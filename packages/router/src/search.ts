@@ -40,6 +40,7 @@ interface Label {
   readonly noDataSeconds: number;
   readonly prev: number;
   readonly via: EdgeId;
+  readonly reverse: boolean;
 }
 
 interface HeapItem {
@@ -50,6 +51,7 @@ interface HeapItem {
 interface Link {
   readonly to: NodeId;
   readonly edge: Edge;
+  readonly reverse: boolean;
 }
 
 interface Prepared {
@@ -78,9 +80,8 @@ function prepare(input: RouteInput): Prepared {
   const edges = new Map<EdgeId, Edge>();
   const positions = new Map<NodeId, LngLat>();
   for (const edge of input.graph.edges) {
-    const list = links.get(edge.from);
-    if (list) list.push({ to: edge.to, edge });
-    else links.set(edge.from, [{ to: edge.to, edge }]);
+    addLink(links, edge.from, { to: edge.to, edge, reverse: false });
+    if (edge.from !== edge.to) addLink(links, edge.to, { to: edge.from, edge, reverse: true });
     edges.set(edge.id, edge);
     const origin = edge.geometry[0];
     const dest = edge.geometry[edge.geometry.length - 1];
@@ -124,6 +125,7 @@ function search(prepared: Prepared, weight: RouteWeight): RouteResult | null {
       noDataSeconds: 0,
       prev: -1,
       via: -1,
+      reverse: false,
     },
   ];
   const heap: HeapItem[] = [];
@@ -157,6 +159,7 @@ function search(prepared: Prepared, weight: RouteWeight): RouteResult | null {
         noDataSeconds: label.noDataSeconds + walked.noDataSeconds,
         prev: item.label,
         via: link.edge.id,
+        reverse: link.reverse,
       });
       heapPush(heap, { f: label.cost + walked.cost + heuristic(prepared, link.to), label: labels.length - 1 });
     }
@@ -165,7 +168,7 @@ function search(prepared: Prepared, weight: RouteWeight): RouteResult | null {
 }
 
 function result(prepared: Prepared, weight: RouteWeight, labelIndex: number | null, labels: readonly Label[] = []): RouteResult {
-  const edgeIds: EdgeId[] = [];
+  const steps: { id: EdgeId; reverse: boolean }[] = [];
   let cursor = labelIndex;
   let distanceM = 0;
   let durationS = 0;
@@ -182,16 +185,16 @@ function result(prepared: Prepared, weight: RouteWeight, labelIndex: number | nu
     while (cursor !== null && cursor >= 0) {
       const step: Label | undefined = labels[cursor];
       if (!step || step.via < 0) break;
-      edgeIds.push(step.via);
+      steps.push({ id: step.via, reverse: step.reverse });
       cursor = step.prev;
     }
-    edgeIds.reverse();
+    steps.reverse();
   }
   return {
     weight,
     departure: prepared.input.departure,
-    edgeIds,
-    geometry: geometry(prepared, edgeIds),
+    edgeIds: steps.map((step) => step.id),
+    geometry: geometry(prepared, steps),
     distanceM,
     durationS,
     sunSeconds,
@@ -199,20 +202,27 @@ function result(prepared: Prepared, weight: RouteWeight, labelIndex: number | nu
   };
 }
 
-function geometry(prepared: Prepared, edgeIds: readonly EdgeId[]): LngLat[] {
+function geometry(prepared: Prepared, steps: readonly { id: EdgeId; reverse: boolean }[]): LngLat[] {
   const points: LngLat[] = [];
-  for (const id of edgeIds) {
-    const edge = prepared.edges.get(id);
+  for (const step of steps) {
+    const edge = prepared.edges.get(step.id);
     if (!edge) continue;
+    const line = step.reverse ? [...edge.geometry].reverse() : edge.geometry;
     const startAt = points.length === 0 ? 0 : 1;
-    for (let i = startAt; i < edge.geometry.length; i++) {
-      const point = edge.geometry[i];
+    for (let i = startAt; i < line.length; i++) {
+      const point = line[i];
       if (point) points.push(point);
     }
   }
   if (points.length > 0) return points;
   const origin = prepared.positions.get(prepared.input.start);
   return origin ? [origin] : [];
+}
+
+function addLink(links: Map<NodeId, Link[]>, from: NodeId, link: Link): void {
+  const list = links.get(from);
+  if (list) list.push(link);
+  else links.set(from, [link]);
 }
 
 function sunFraction(prepared: Prepared, edgeId: EdgeId, minutes: number): number | null {
