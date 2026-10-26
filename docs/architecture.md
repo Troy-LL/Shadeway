@@ -29,19 +29,19 @@ Basemap: open vector tiles for the pilot box as one static file from the pipelin
 
 ## Data sources
 
-Sources, order, and licenses are decided in [004](decisions/004-data-sources-and-licenses.md). Coverage over BGC is **unverified**. Nothing below is measured for BGC until Track 2 part A reports and patches the counts here.
+Sources, order, and licenses are decided in [004](decisions/004-data-sources-and-licenses.md). Coverage over the pilot box was measured on 2026-10-26 by the pipeline `measure` command.
 
-- Pilot box: BGC, Taguig. Provisional bounding box lat 14.5418 to 14.5598, lon 121.0417 to 121.0603, set in the pipeline config. Unverified against the walkable grid.
-- Graph: OpenStreetMap footpaths, crossings, covered and bridge tags. Unmeasured: footway and sidewalk coverage, count of `covered=yes` ways, count of pedestrian `bridge` ways.
-- Buildings: Overture footprints. Unmeasured: count, and how many have `height`, `building:levels`, and a Google raster height.
-- Google 2.5D Temporal raster over BGC: presence and completeness unverified. Caps at 100 m.
-- Canopy (phase two): Meta and WRI 1 m raster. Unmeasured over BGC: share of pixels at 3 m or more, and whether canopy lands inside building footprints.
-- OpenStreetMap tree points: count over BGC unmeasured.
+- Pilot box: BGC, Taguig. Bounding box lat 14.5415 to 14.5628, lon 121.0417 to 121.0603, set in the pipeline config. Checked against the OpenStreetMap walkable grid on 2026-10-26. The north edge moved from 14.5598 to 14.5628 so the rectangle reaches Kalayaan Avenue, which bends north through the numbered avenues. The south edge moved from 14.5418 to 14.5415 so the south end of 5th Avenue is inside. The rectangle also includes some streets north of Kalayaan where that avenue bends south. McKinley Hill stays outside.
+- Graph: OpenStreetMap footpaths, crossings, covered and bridge tags. Measured 2026-10-26 from https://overpass-api.de/api/interpreter (OSM timestamp 2026-10-26T12:01:36Z): 1,974 footpath edges, 24 `covered=yes` edges, 41 pedestrian bridge edges. Footpath edges are linear ways tagged `highway` footway, sidewalk, pedestrian, path, steps, crossing, or corridor, excluding `access=private` and `area=yes`, split at junctions, and kept when the segment meets the box.
+- Buildings: Overture footprints, release 2026-10-21.0 (https://docs.overturemaps.org/blog/2026/10/21/release-notes/, OSM cutoff 2026-09-12), from `s3://overturemaps-us-west-2/release/2026-10-21.0/theme=buildings/type=building/`. Measured 2026-10-26, centroid in the box: 10,643 buildings, 191 with `height`, 302 with `num_floors` (Overture's field for OSM `building:levels`), 10,397 with a Google raster height.
+- Google 2.5D Temporal raster over BGC: present. Tile https://storage.googleapis.com/open-buildings-temporal-data/v1/geotiffs/3397c_2023_06_30/tile_IQqvgG9RLG4.tif (manifest https://storage.googleapis.com/open-buildings-temporal-data/v1/manifests/33_EPSG_32651_2023_06_30.json, inference 2023-06-30, imagery 2023-01-01 to 2023-12-27). 10,397 of 10,643 footprints contain a height pixel above 0. Caps at 100 m, and the sampled window reaches 100 m.
+- Canopy (phase two): Meta and WRI 1 m raster, https://dataforgood-fb-data.s3.amazonaws.com/forests/v1/alsgedi_global_v6_float/chm/132303122.tif (object last modified 2024-04-10). Measured 2026-10-26: 292,158 pixels at 3 m or more, out of 3,556,434 pixels whose centers fall in the box (8.2%). Whether canopy lands inside building footprints is still unmeasured.
+- OpenStreetMap tree points: 479 nodes tagged `natural=tree` in the box, same Overpass extract, measured 2026-10-26.
 - Context from a different area, not BGC: in a 2 km box around PUP Sta. Mesa, OpenStreetMap had 9,409 buildings, 15 with `height` and 86 with `building:levels`. Expect BGC to differ. That is why measuring comes first.
 - Overrides: tag rules plus `data/overrides/` for covered walkways, skybridges, overpasses, and the tallest tower heights, each with a source note.
 - Sun position: computed, no data source.
 
-Counts to fill in, in place, by Track 2 part A: buildings, with `height`, with `building:levels`, with raster height, footpath edges, `covered=yes` edges, pedestrian bridge edges, canopy pixels at 3 m or more, tree points.
+Counts measured in place by Track 2 part A: buildings 10,643, with `height` 191, with `building:levels` 302, with raster height 10,397, footpath edges 1,974, `covered=yes` edges 24, pedestrian bridge edges 41, canopy pixels at 3 m or more 292,158, tree points 479.
 
 ## Phases
 
