@@ -15,7 +15,7 @@ We will compute shade in one package, `packages/shade-model`, pure TypeScript wi
 - Canopy (phase two) is partial transmittance, a value between 0 and 1 per canopy cell, never opaque.
 - Slot grid: 30 minute slots from 06:00 to 18:00 local, 25 slots a day.
 - Reference days: one equinox, the June solstice, the December solstice. Other dates interpolate on solar declination between the reference days.
-- Missing building heights are estimated from `building:levels` and a per-type default, and each building carries a height source: measured, levels, or default. Estimated heights are drawn with a dashed shadow edge.
+- Building heights follow the chain in [004](004-data-sources-and-licenses.md). Each building carries a height source: `osm`, `levels`, `raster`, or `default`. Any height not `osm` is an estimate and is drawn with a dashed shadow edge.
 - Edge cost is distance plus weight times sun-seconds, where sun-seconds is edge length divided by walking speed times the sun fraction in the slot the walker arrives.
 
 Pipeline output (a sun fraction per edge per slot) and the polygons drawn for the chosen route both come from this package. A fixture test fails if they differ by more than 0.10 sun fraction on any fixture edge.

@@ -4,7 +4,7 @@ Shadeway is a static web app plus an offline data pipeline. Stack and hosting ar
 
 ## Context
 
-- A walker opens the web app on a phone or laptop, picks a start and end inside the pilot area, and gets three routes with their time in the sun.
+- A walker opens the web app on a phone or laptop, picks a start and end inside the pilot area (BGC, Taguig), and gets three routes with their time in the sun.
 - The app loads static files from Cloudflare Pages: the web bundle, the basemap, and the shade tiles.
 - CI runs the pipeline, which reads OpenStreetMap and a canopy raster and writes the shade tiles. Nothing else talks to the network at runtime.
 
@@ -18,9 +18,9 @@ Shadeway is a static web app plus an offline data pipeline. Stack and hosting ar
 
 ## Data flow
 
-1. Pipeline downloads the pilot extract (OpenStreetMap), builds the walking graph, joins buildings and heights, and reads the canopy raster in phase two.
+1. Pipeline downloads the pilot extract (OpenStreetMap, Overture buildings), builds the walking graph, joins buildings and heights per [004](decisions/004-data-sources-and-licenses.md), applies covered and bridge tags and overrides, and reads the canopy raster in phase two.
 2. For each edge and each slot, it samples points along the edge, tests each against the shade model, and stores the sun fraction as one byte: 0 to 254 scaled, 255 no data. Tiles are tiled by area, one file set per reference day.
-3. It writes a build report: edge count, buildings by height source (measured, levels, default), override edges, and the interpolation error on one non-reference date.
+3. It writes a build report: edge count, buildings by height source (`osm`, `levels`, `raster`, `default`), override edges, and the interpolation error on one non-reference date.
 4. The web app fetches the tile manifest, loads tiles that cover the corridor between start and end, and hands them to the router worker.
 5. The worker runs A* with cost from [001](decisions/001-one-shared-shade-model.md) at three weights: fastest, balanced, shadiest. The slot used for an edge is the slot the walker reaches it, from the chosen departure time.
 6. The map draws the chosen route and, for the corridor around it, shadow polygons computed by `packages/shade-model` for the departure slot. 3D uses extruded buildings and sun lighting from the same sun position.
@@ -29,13 +29,19 @@ Basemap: open vector tiles for the pilot box as one static file from the pipelin
 
 ## Data sources
 
-Pending verification. Coverage was not measured on 2026-10-26: the public OpenStreetMap query service returned errors from the build box, and a data reality check is outstanding.
+Sources, order, and licenses are decided in [004](decisions/004-data-sources-and-licenses.md). Coverage over BGC is **unverified**. Nothing below is measured for BGC until Track 2 part A reports and patches the counts here.
 
-- Walking graph: OpenStreetMap highway ways. Known gap: sidewalks and informal passages in Sta. Mesa may be unmapped.
-- Buildings: OpenStreetMap footprints. Height and `building:levels` coverage in the pilot box is unmeasured. Track 2 reports it before shading.
-- Canopy (phase two): candidates are a 1 m global canopy height map and a 10 m land cover tree class. Manila accuracy of either is unverified. Choice becomes a decision file when made.
-- Overrides: hand-mapped covered walkways, viaducts, overpasses for the pilot, in `data/overrides/pilot.geojson`, each with a source note.
+- Pilot box: BGC, Taguig. Provisional bounding box lat 14.5418 to 14.5598, lon 121.0417 to 121.0603, set in the pipeline config. Unverified against the walkable grid.
+- Graph: OpenStreetMap footpaths, crossings, covered and bridge tags. Unmeasured: footway and sidewalk coverage, count of `covered=yes` ways, count of pedestrian `bridge` ways.
+- Buildings: Overture footprints. Unmeasured: count, and how many have `height`, `building:levels`, and a Google raster height.
+- Google 2.5D Temporal raster over BGC: presence and completeness unverified. Caps at 100 m.
+- Canopy (phase two): Meta and WRI 1 m raster. Unmeasured over BGC: share of pixels at 3 m or more, and whether canopy lands inside building footprints.
+- OpenStreetMap tree points: count over BGC unmeasured.
+- Context from a different area, not BGC: in a 2 km box around PUP Sta. Mesa, OpenStreetMap had 9,409 buildings, 15 with `height` and 86 with `building:levels`. Expect BGC to differ. That is why measuring comes first.
+- Overrides: tag rules plus `data/overrides/` for covered walkways, skybridges, overpasses, and the tallest tower heights, each with a source note.
 - Sun position: computed, no data source.
+
+Counts to fill in, in place, by Track 2 part A: buildings, with `height`, with `building:levels`, with raster height, footpath edges, `covered=yes` edges, pedestrian bridge edges, canopy pixels at 3 m or more, tree points.
 
 ## Phases
 
@@ -43,10 +49,11 @@ Each bar is counted. A phase is done when every bar is true.
 
 ### Phase one: pilot, building-only estimate
 
-Scope: pilot area, building shadows and overrides, 2D route with shadow polygons, basic 3D view.
+Scope: BGC, building shadows plus covered and bridge handling, 2D route with shadow polygons, basic 3D view.
 
+- The Data sources section above holds 9 measured BGC counts and no "unverified" marker for them.
 - 1 command, `pnpm --filter @shadeway/pipeline build:pilot`, builds pilot tiles in CI with 0 failed steps.
-- 3 pilot walks (PUP Sta. Mesa to each of 2 nearest LRT-2 stations, and 1 reverse) each return 3 routes: fastest, balanced, shadiest.
+- 3 pilot walks inside BGC, listed in the pipeline config, each return 3 routes: fastest, balanced, shadiest. At least 1 walk uses a covered walkway or overpass and at least 1 runs along a tree-lined street.
 - Router p95 under 500 ms over 20 runs per pilot walk with 4x CPU throttle in a desktop browser.
 - 3 screens exist: Search, Compare, In-route, with the states in [design.md](design.md).
 - Shadow polygons and tile values agree on every fixture edge, 0 fixture edges differ by more than 0.10 sun fraction.
@@ -56,7 +63,7 @@ Scope: pilot area, building shadows and overrides, 2D route with shadow polygons
 
 ### Phase two: canopy and 3D polish
 
-- 1 canopy source chosen by a decision file, with a Manila check of at least 20 sample points against photos or walked observations.
+- Canopy from the Meta and WRI raster per [004](decisions/004-data-sources-and-licenses.md), with a BGC check of at least 20 sample points against photos or walked observations, including newer construction.
 - Canopy enters through `packages/shade-model` with transmittance. 0 other files compute canopy shade.
 - 20 new walked segments on tree-lined streets are scored and the README match rate is updated.
 - 3D: tree volumes for canopy, smooth camera moves between 2D and 3D under 400 ms, sun lighting matches the slot.
@@ -66,7 +73,7 @@ Scope: pilot area, building shadows and overrides, 2D route with shadow polygons
 
 - 3 more areas build from the same command with no code change, only an area config.
 - Each area's tiles are 5 MB or less for the pilot-sized box, or the report names the reason.
-- Each area has its own overrides file, possibly empty, and its own walked-segment score before any claim for that area.
+- Each area has its own overrides, possibly empty, and its own walked-segment score before any claim for that area.
 
 ## Build tracks
 
@@ -86,9 +93,12 @@ Track 0 runs first. Tracks 1 to 6 start after Track 0 merges and run in parallel
 
 ### Track 2: pipeline
 
-- Read: [003](decisions/003-static-precompute-no-backend.md), [002](decisions/002-honest-data-labels.md), `packages/contract/src/index.ts`, the Data flow and Data sources sections of this file.
-- Done: `build:pilot` produces graph, tiles, manifest, basemap file, and the build report; the report counts buildings by height source and prints OpenStreetMap height and levels coverage for the pilot box; overrides file loaded and applied; the pilot box covers PUP Sta. Mesa and the 2 nearest LRT-2 stations; the walked-segment log format and scorer exist (Track 7 uses them); a small fixture area builds in under 60 seconds in a test.
-- Fences: owns `packages/pipeline` and `data/overrides/`; never commit raw extracts or `data/build/`; calls shade only through `packages/shade-model`; uses the stub if Track 1 has not merged.
+Part A runs first and merges before part B starts shading.
+
+- Read: [003](decisions/003-static-precompute-no-backend.md), [004](decisions/004-data-sources-and-licenses.md), [002](decisions/002-honest-data-labels.md), `packages/contract/src/index.ts`, the Data flow and Data sources sections of this file.
+- Done, part A (measure BGC): a `measure` command over the provisional BGC box that prints the 9 counts listed under Data sources, including the Google raster height presence over BGC (download the raster tile once and count footprints with a value); the counts patched into this file's Data sources section in place, replacing the unverified lines they measure; the provisional box adjusted to the real walkable grid if it is wrong.
+- Done, part B: `build:pilot` produces graph, tiles, manifest with attribution, basemap file, and the build report; the report counts buildings by height source and covered, bridge, and override edges; the height chain from 004 applied; tag rules and overrides loaded and applied; the 3 pilot walks and the walked-segment log format and scorer exist (Track 7 uses them); a small fixture area builds in under 60 seconds in a test.
+- Fences: owns `packages/pipeline` and `data/overrides/`; never commit raw extracts, rasters, or `data/build/`; no non-commercial dataset; calls shade only through `packages/shade-model`; uses the stub if Track 1 has not merged.
 
 ### Track 3: router
 
@@ -116,8 +126,8 @@ Track 0 runs first. Tracks 1 to 6 start after Track 0 merges and run in parallel
 
 ### Track 7: integrate phase one
 
-- Read: this file, [002](decisions/002-honest-data-labels.md), [design.md](design.md).
-- Done: web app loads real pilot tiles and routes the 3 pilot walks; every phase one bar is checked and listed with its count in the pull request; a template for logging the 20 walked segments is committed; README Status and Run sections match what runs.
+- Read: this file, [002](decisions/002-honest-data-labels.md), [005](decisions/005-prior-art-and-differentiation.md), [design.md](design.md).
+- Done: web app loads real pilot tiles and routes the 3 pilot walks; every phase one bar is checked and listed with its count in the pull request; a template for logging the 20 walked segments is committed; the hand comparison of 3 BGC routes against undercover.ph from decision 005 is written up in the pull request; README Status and Run sections match what runs.
 - Fences: edits across packages only to fix integration; no new feature; no accuracy statement until the scorer reports.
 
 Later tracks, split when phase one lands: canopy ingest and shade-model transmittance, 3D polish, area config and extra areas.

@@ -15,15 +15,15 @@ Feel: Apple Maps. The map is the screen. Text is minimal and navigation is obvio
 
 - Bottom sheet with three detents: peek, half, full. Drag, tap the grabber, or press Up and Down when it has focus.
 - Floating controls over the map, top right: view toggle, then a locate button.
-- Attribution bottom left of the map: "OpenStreetMap contributors".
+- Attribution bottom left of the map, text from the tile manifest (see decision 004).
 
 ## Screens
 
 ### Search
 
-- Map shows the pilot area, 3D, pitched.
+- Map shows BGC, 3D, pitched.
 - Sheet at peek: a field with the placeholder "Where to?".
-- Half detent: two pilot chips, "PUP Sta. Mesa" and "LRT-2 Pureza", then recents.
+- Half detent: two pilot chips, "Bonifacio High Street" and "Market! Market!", then recents.
 - A chip "Leave now" opens a time picker on the 30 minute slot grid.
 - Primary action: choose a destination, which opens Compare.
 
@@ -56,7 +56,8 @@ Feel: Apple Maps. The map is the screen. Text is minimal and navigation is obvio
 - Route line, sunny stretch: amber, thick, with a white casing.
 - Route line, shaded stretch: teal, thinner, no casing.
 - Shadow polygons: ink at low opacity. Edge dashed where the building height is estimated.
-- Canopy (phase two): green tint at lower opacity than building shadow, never the same fill.
+- Canopy (phase two): green tint at lower opacity than building shadow, never the same fill. Card detail row says tree data may be out of date.
+- Covered walkways and bridges: drawn as a teal line with a thin roof tick, and counted as shade.
 - Estimated height is never hidden: dashed edge in the map, and a count in the card's detail row.
 
 ## States
