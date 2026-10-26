@@ -25,6 +25,13 @@ Not runnable yet. Track 0 in [docs/architecture.md](docs/architecture.md) create
 - Build pilot data: `pnpm --filter @shadeway/pipeline build:pilot` (writes `data/build/pilot/`)
 - Web dev server: `pnpm --filter @shadeway/web dev` (port 5173)
 
+## CI secrets
+
+Set these repository secrets in GitHub for Cloudflare Pages preview deploys (see `.github/workflows/deploy-preview.yml`). Do not commit values.
+
+- `CLOUDFLARE_API_TOKEN`: API token with Cloudflare Pages edit permission for the Shadeway project
+- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare account ID that owns the Pages project
+
 ## Limits
 
 - Pilot bounding box (BGC) only. Outside it the app says so and does not route.

@@ -1,0 +1,6 @@
+# Cloudflare Pages project for Shadeway (preview deploys only via GitHub Actions).
+name = "shadeway"
+compatibility_date = "2024-09-23"
+
+[vars]
+SHADEWAY_DEPLOY = "preview"

@@ -1,0 +1,42 @@
+name: Pilot build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - pilot-*
+
+concurrency:
+  group: pilot-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build pilot tiles
+        run: pnpm --filter @shadeway/pipeline build:pilot
+
+      - name: Upload pilot output
+        uses: actions/upload-artifact@v4
+        with:
+          name: pilot-tiles
+          path: data/build/pilot/
+          if-no-files-found: error
