@@ -17,11 +17,11 @@ Footprints and graph
 Heights, first match wins
 1. OSM `height`.
 2. OSM `building:levels` times 3.74 m. The multiplier is reported by undercover.ph from Makati buildings and is unmeasured for BGC. We tune it after the BGC check.
-3. Google Open Buildings 2.5D Temporal, a 4 m raster, median inside the footprint. Philippines is in its covered list. Completeness over BGC is **unverified**. It caps at 100 m and underestimates towers.
-4. A default per building type, flagged `default`.
+3. Google Open Buildings 2.5D Temporal, a 4 m raster, median inside the footprint. Philippines is in its covered list. The pipeline measure found the raster present over the pilot box. It caps at 100 m and underestimates towers. An independent check on a different box (architecture, Data sources) measured mean absolute error of 26 m against 191 OSM-tagged buildings: too high on low and mid-rise, too low on towers because of the cap. That error has no field truth.
+4. A default per building type, flagged `default`. The pipeline calls `estimateHeight` in `packages/shade-model` for this chain. The default that function returns is 3.74 m for every building, not a second per-type table.
 
 Overrides
-- BGC is full of towers, so the pilot keeps a hand-fixed height list for the tallest buildings, each with a source note, in `data/overrides/`.
+- BGC is full of towers, so the pilot keeps a hand-fixed height list for the tallest buildings, each with a source note, in `data/overrides/`. A listed height replaces the chain result. Its height source is `override`. It is not an OSM `height` tag, so decision 001 still draws it as an estimate.
 
 Canopy (phase two)
 - Meta and WRI 1 m canopy height. Threshold near 3 m. The imagery is about 2018 to 2020, so the UI says tree data may be out of date. BGC has had construction since, so the pilot walks check it.

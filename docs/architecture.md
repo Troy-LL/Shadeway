@@ -20,12 +20,12 @@ Shadeway is a static web app plus an offline data pipeline. Stack and hosting ar
 
 1. Pipeline downloads the pilot extract (OpenStreetMap, Overture buildings), builds the walking graph, joins buildings and heights per [004](decisions/004-data-sources-and-licenses.md), applies covered and bridge tags and overrides, and reads the canopy raster in phase two.
 2. For each edge and each slot, it samples points along the edge, tests each against the shade model, and stores the sun fraction as one byte: 0 to 254 scaled, 255 no data. Tiles are tiled by area, one file set per reference day.
-3. It writes a build report: edge count, buildings by height source (`osm`, `levels`, `raster`, `default`), override edges, and the interpolation error on one non-reference date.
+3. It writes a build report: edge count, buildings by height source (`osm`, `levels`, `raster`, `default`, `override`), covered edges, bridge edges, override edges, and the mean absolute error of sun fraction at 12:00 Asia/Manila on 2026-05-01 against the reference-day interpolation, on edges that are not forced to full shade.
 4. The web app fetches the tile manifest, loads tiles that cover the corridor between start and end, and hands them to the router worker.
 5. The worker runs A* with cost from [001](decisions/001-one-shared-shade-model.md) at three weights: fastest, balanced, shadiest. The slot used for an edge is the slot the walker reaches it, from the chosen departure time.
 6. The map draws the chosen route and, for the corridor around it, shadow polygons computed by `packages/shade-model` for the departure slot. 3D uses extruded buildings and sun lighting from the same sun position.
 
-Basemap: open vector tiles for the pilot box as one static file from the pipeline. Until it exists, `apps/web` uses a public OpenStreetMap-based style in dev and records the choice here. Attribution is shown on the map.
+Basemap: `build:pilot` writes `data/build/bgc/basemap.geojson`, one static GeoJSON file of the walking graph and the building footprints for the pilot box. It is not a vector-tile archive. A PMTiles or MVT extract was not built: the pipeline does not download a planet basemap and has no vector-tile encoder. `apps/web` can load this GeoJSON, or keep a public OpenStreetMap-based style in dev. Attribution is shown on the map from the tile manifest.
 
 ## Data sources
 
@@ -43,6 +43,17 @@ Sources, order, and licenses are decided in [004](decisions/004-data-sources-and
 
 Counts measured in place by Track 2 part A: buildings 10,643, with `height` 191, with `building:levels` 302, with raster height 10,397, footpath edges 1,974, `covered=yes` edges 24, pedestrian bridge edges 41, canopy pixels at 3 m or more 292,158, tree points 479.
 
+### Independent cross-check
+
+A second measurement, not a replacement for the nine counts above. Bori, 2026-10-26, box lat 14.5418 to 14.5598, lon 121.0417 to 121.0603, centred on the OpenStreetMap Nominatim point for Bonifacio Global City (14.5508 N, 121.0510 E). Our box is the pipeline config: lat 14.5415 to 14.5628, lon 121.0417 to 121.0603. The north edge is 14.5628 so the rectangle reaches Kalayaan Avenue, and the south edge is 14.5415. We count an Overture building when its centroid is inside the box. Bori counted OSM ways that touch the box, and Overture buildings fully inside the box.
+
+- Google raster heights have mean absolute error 26 m against 191 OSM-tagged buildings (tag `height`, otherwise `building:levels` times 3.74 m, after dropping footprints the raster barely sees). Too high on low and mid-rise, too low on towers because of the 100 m cap. Unverified without field truth. Our measure did not repeat that error. It counted presence: 10,397 of 10,643 footprints contain a height pixel above 0. Presence is not accuracy. The 2026-10-26 build report counted 10,810 shadow casters (10,643 building rows, 163 `building_part` rows, multipolygons split): height source `osm` 339, `levels` 126, `raster` 9,416, `default` 929, `override` 0. The 339 `osm` casters are more than the 191 building rows with `height` because parts carry their own OSM heights. The 929 defaults had no OSM height, no levels, and no positive sample on the about-4 m grid. That grid can miss a footprint the 0.5 m presence test still hits, so 929 is not a count of buildings absent from the raster.
+- Covered walkways are mostly missing from OSM. Only 1.0% of the pedestrian network (0.73 km of 75.6 km) is tagged `covered=yes`. Our 24 `covered=yes` edges are graph edges in the larger box (ways split at junctions, `access=private` and `area=yes` dropped), not a length, so 24 of 1,974 is not that 1.0%.
+- OSM tree nodes sit near canopy only 28% of the time (398 nodes in Bori's box, max canopy in a roughly 6 m neighbourhood). We counted 479 tree nodes in the larger box and did not repeat the canopy match. Bori's share of pixels at 3 m or more is 8.6%. Ours is 8.2% (292,158 of 3,556,434 pixel centers). Different box, different pixel test.
+- undercover.ph already covers BGC. Its `metro-core` area and its `bgc` neighbourhood bbox (lon 121.040 to 121.062, lat 14.533 to 14.563) contain both boxes.
+- Building totals differ for those reasons. Bori: 6,790 OSM building ways touching the box (177 with `height`, 246 with `building:levels`); 7,494 Overture buildings fully inside (168 with `height`). Ours: 10,643 Overture buildings with centroid in the larger box (191 with `height`, 302 with `num_floors`). Overture also includes Google Open Buildings and Microsoft footprints with no OSM height. Both used Overture release 2026-10-21.0. Bori counted 154 `building_part` rows fully inside the smaller box. This build kept 163 part rows with centroid in our box.
+- This build's walking graph came from https://overpass.openstreetmap.fr/api/interpreter, OSM timestamp 2026-08-10T00:10:23Z, not the 2026-10-26 extract the measure used. It still counted 1,974 footpath edges, 24 `covered=yes` edges, and 41 bridge edges, the same as that measure. The report's 25 covered edges are those 24 plus 1 `tunnel=building_passage` edge. The interpolation error on 2026-05-01 at 12:00 was 0.107 sun fraction over 1,910 edges that are not forced to full shade. That number is the reference-day approximation, not a walked match rate.
+
 ## Phases
 
 Each bar is counted. A phase is done when every bar is true.
@@ -51,7 +62,7 @@ Each bar is counted. A phase is done when every bar is true.
 
 Scope: BGC, building shadows plus covered and bridge handling, 2D route with shadow polygons, basic 3D view.
 
-- The Data sources section above holds 9 measured BGC counts and no "unverified" marker for them.
+- The Data sources section above holds 9 measured BGC counts. The independent cross-check is a second measurement over a different box and does not replace those counts.
 - 1 command, `pnpm --filter @shadeway/pipeline build:pilot`, builds pilot tiles in CI with 0 failed steps.
 - 3 pilot walks inside BGC, listed in the pipeline config, each return 3 routes: fastest, balanced, shadiest. At least 1 walk uses a covered walkway or overpass and at least 1 runs along a tree-lined street.
 - Router p95 under 500 ms over 20 runs per pilot walk with 4x CPU throttle in a desktop browser.
@@ -97,7 +108,7 @@ Part A runs first and merges before part B starts shading.
 
 - Read: [003](decisions/003-static-precompute-no-backend.md), [004](decisions/004-data-sources-and-licenses.md), [002](decisions/002-honest-data-labels.md), `packages/contract/src/index.ts`, the Data flow and Data sources sections of this file.
 - Done, part A (measure BGC): a `measure` command over the provisional BGC box that prints the 9 counts listed under Data sources, including the Google raster height presence over BGC (download the raster tile once and count footprints with a value); the counts patched into this file's Data sources section in place, replacing the unverified lines they measure; the provisional box adjusted to the real walkable grid if it is wrong.
-- Done, part B: `build:pilot` produces graph, tiles, manifest with attribution, basemap file, and the build report; the report counts buildings by height source and covered, bridge, and override edges; the height chain from 004 applied; tag rules and overrides loaded and applied; the 3 pilot walks and the walked-segment log format and scorer exist (Track 7 uses them); a small fixture area builds in under 60 seconds in a test.
+- Done, part B: `build:pilot` produces graph, tiles, manifest with attribution, basemap file, and the build report under `data/build/bgc/` (a symlink `data/build/pilot` points at that directory so the Pages script can copy it); the report counts buildings by height source and covered, bridge, and override edges; the height chain from 004 applied; tag rules and overrides loaded and applied; the 3 pilot walks and the walked-segment log format and scorer exist (Track 7 uses them); a small fixture area builds in under 60 seconds in a test. A walked-segment log is version 1 JSON: `id`, `date`, `minutes` since Asia/Manila midnight, `observed` and `predicted` of `sun` or `shade`, optional `edgeId`. `predicted` is `shade` when the sun fraction is below 0.5. `pnpm --filter @shadeway/pipeline score -- <file>` prints `match_rate`. An empty log prints `match_rate=none`.
 - Fences: owns `packages/pipeline` and `data/overrides/`; never commit raw extracts, rasters, or `data/build/`; no non-commercial dataset; calls shade only through `packages/shade-model`; uses the stub if Track 1 has not merged.
 
 ### Track 3: router

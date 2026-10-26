@@ -81,8 +81,18 @@ export interface SunPosition {
   readonly elevationDeg: number;
 }
 
-export const HEIGHT_SOURCES = ["osm", "levels", "raster", "default"] as const;
+export const HEIGHT_SOURCES = ["osm", "levels", "raster", "default", "override"] as const;
 export type HeightSource = (typeof HEIGHT_SOURCES)[number];
+
+/**
+ * Map attribution, one list, decision 004.
+ * ODbL for OpenStreetMap and Overture. CC BY 4.0 for Google Open Buildings heights.
+ */
+export const ATTRIBUTION = [
+  "OpenStreetMap contributors, ODbL",
+  "Overture Maps Foundation buildings, ODbL",
+  "Google Open Buildings 2.5D Temporal, CC BY 4.0",
+] as const;
 
 /** Any height not from an OSM `height` tag is an estimate and is drawn with a dashed shadow edge. */
 export function isEstimatedHeight(source: HeightSource): boolean {

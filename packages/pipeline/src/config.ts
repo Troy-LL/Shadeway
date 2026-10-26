@@ -1,3 +1,4 @@
+import type { LngLat } from "@shadeway/contract";
 import type { BBox } from "./edges.js";
 
 export const bgcBox: BBox = {
@@ -32,3 +33,37 @@ export const overpassEndpoints = [
 
 export const duckdbRelease = "v2.0.0";
 export const duckdbUrl = `https://github.com/duckdb/duckdb/releases/download/${duckdbRelease}/duckdb-cli-linux-amd64.tar.gz`;
+
+/** Non-reference date used for the build report's interpolation error, 12:00 Asia/Manila. */
+export const interpolationCheck = { date: "2026-05-01", minutes: 12 * 60 } as const;
+
+/**
+ * Three walks inside the pilot box. Coordinates are `[lng, lat]`.
+ * Covered and bridge ways were read from Overpass (`https://overpass.openstreetmap.fr/api/interpreter`, OSM timestamp 2026-08-10T00:10:23Z).
+ * Tree counts are `natural=tree` nodes within 25 m of the named way in that same extract.
+ */
+export const pilotWalks: readonly {
+  id: string;
+  from: LngLat;
+  to: LngLat;
+  note: string;
+}[] = [
+  {
+    id: "high-street-covered",
+    from: [121.0476, 14.55152],
+    to: [121.04606, 14.55202],
+    note: "OSM way 846184128, highway=pedestrian, name=Bonifacio High Street, covered=yes. A covered walkway.",
+  },
+  {
+    id: "high-street-trees",
+    from: [121.04862, 14.55148],
+    to: [121.05303, 14.55012],
+    note: "Pedestrian Bonifacio High Street from way 203893598 (14.55148, 121.04862) to way 178125957 (14.55012, 121.05303). natural=tree nodes within 25 m: 25 on way 203893598 and 34 on parallel footway 203893587. Tree-lined by those tags.",
+  },
+  {
+    id: "uptown-footbridge",
+    from: [121.0541499, 14.5569653],
+    to: [121.0543932, 14.55879],
+    note: "OSM way 613886961, highway=footway, bridge=viaduct, layer=1. An overpass.",
+  },
+];

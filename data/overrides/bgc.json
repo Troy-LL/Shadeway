@@ -1,0 +1,5 @@
+{
+  "note": "No height or edge overrides are applied. Metrobank Center (Grand Hyatt Manila) has two cited heights that do not agree: Wikipedia lists a total height of 318 m (https://en.wikipedia.org/wiki/Metrobank_Center) and CTBUH lists an architectural height of 259.1 m (https://www.skyscrapercenter.com/building/grand-hyatt-hotel/5208). OpenStreetMap building:part way 582087455 is tagged height=318 at 14.556506, 121.051846 (Overpass https://overpass.openstreetmap.fr/api/interpreter, OSM timestamp 2026-08-10T00:10:23Z). The parent way Grand Hyatt Manila (580263354) is tagged 37.4 m, which is the podium, not the tower. Seeding 318 m or 259.1 m would either relabel an OSM height the chain already accepts, or replace it with the other published figure, and a point on the tower can also fall inside the podium footprint. The tallest towers stay on the decision 004 chain until one footprint and one height are chosen together.",
+  "heights": [],
+  "edges": []
+}

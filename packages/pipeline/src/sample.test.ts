@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { countBuildings, footprintHasRasterHeight, type HeightGrid } from "./sample.js";
+import { countBuildings, footprintHasRasterHeight, medianRasterHeight, type HeightGrid } from "./sample.js";
 
 const box = { south: 0, west: 0, north: 10, east: 10 };
 
@@ -34,4 +34,19 @@ test("a footprint has a raster height when a pixel inside it is above the nodata
   expect(footprintHasRasterHeight(grid, coverZero)).toBe(false);
   expect(footprintHasRasterHeight(grid, coverNodata)).toBe(false);
   expect(footprintHasRasterHeight(grid, coverLast)).toBe(true);
+});
+
+test("raster median uses samples about 4 m apart and ignores nodata", () => {
+  const grid: HeightGrid = {
+    originX: 0,
+    originY: 8,
+    pixelSize: 4,
+    width: 2,
+    height: 2,
+    nodata: -99,
+    values: new Float32Array([10, 30, 20, -99]),
+  };
+  const left = [[[[0.1, 0.1], [3.9, 0.1], [3.9, 7.9], [0.1, 7.9]]]];
+  expect(medianRasterHeight(grid, left)).toBe(15);
+  expect(medianRasterHeight(grid, [[[[10, 10], [12, 10], [12, 12]]]])).toBeUndefined();
 });
