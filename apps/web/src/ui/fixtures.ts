@@ -9,14 +9,14 @@ const DEMO_SEGMENTS: RouteCardModel["segments"] = [
 
 export const DEMO_ROUTES: readonly RouteCardModel[] = [
   {
-    weight: "shadiest",
-    totalMinutes: 18,
-    sunMinutes: 4,
+    weight: "fastest",
+    totalMinutes: 12,
+    sunMinutes: 11,
     segments: DEMO_SEGMENTS,
     confidence: "Estimate",
     geometry: [],
     distanceM: 0,
-    edgeKey: "shadiest",
+    edgeKey: "fastest",
   },
   {
     weight: "balanced",
@@ -29,14 +29,14 @@ export const DEMO_ROUTES: readonly RouteCardModel[] = [
     edgeKey: "balanced",
   },
   {
-    weight: "fastest",
-    totalMinutes: 12,
-    sunMinutes: 11,
+    weight: "shadiest",
+    totalMinutes: 18,
+    sunMinutes: 4,
     segments: DEMO_SEGMENTS,
     confidence: "Estimate",
     geometry: [],
     distanceM: 0,
-    edgeKey: "fastest",
+    edgeKey: "shadiest",
   },
 ];
 
@@ -53,7 +53,7 @@ export function defaultUiState(overrides: Partial<UiState> = {}): UiState {
     minutesRemaining: 14,
     sunMinutesRemaining: 3,
     offRoute: false,
-    navigationLine: "Turn left on 5th Ave · 120 m",
+    navigationLine: "Keep going · 120 m",
     recents: ["Uptown Mall", "Serendra"],
     query: "",
     places: [],

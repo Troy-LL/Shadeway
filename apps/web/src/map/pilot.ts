@@ -15,12 +15,18 @@ export interface PilotPlace {
   readonly at: LngLat;
 }
 
+export interface LandArea {
+  readonly kind: "park" | "water";
+  readonly ring: readonly LngLat[];
+}
+
 export interface PilotData {
   readonly manifest: TileManifest;
   readonly graph: GraphFile;
   readonly tiles: readonly SunTile[];
   readonly buildings: readonly Building[];
   readonly roads: readonly (readonly LngLat[])[];
+  readonly land: readonly LandArea[];
   readonly places: readonly PilotPlace[];
   readonly attribution: readonly string[];
 }
@@ -44,10 +50,17 @@ export async function loadPilot(dataUrl = "/data/bgc/", fetchImpl: typeof fetch 
   });
   const buildings: Building[] = [];
   const roads: LngLat[][] = [];
+  const land: LandArea[] = [];
   for (const feature of basemap.features) {
     if (feature.properties.kind === "edge" && feature.geometry.type === "LineString") {
       const line = lineOf(feature.geometry.coordinates);
       if (line) roads.push(line);
+      continue;
+    }
+    const kind = feature.properties.kind;
+    if ((kind === "park" || kind === "water") && feature.geometry.type === "Polygon") {
+      const ring = polygonRing(feature.geometry.coordinates);
+      if (ring && ring.length >= 4) land.push({ kind, ring });
       continue;
     }
     if (feature.properties.kind !== "building" || feature.geometry.type !== "Polygon") continue;
@@ -67,6 +80,7 @@ export async function loadPilot(dataUrl = "/data/bgc/", fetchImpl: typeof fetch 
     tiles,
     buildings,
     roads,
+    land,
     places,
     attribution: manifest.attribution.length > 0 ? manifest.attribution : ATTRIBUTION,
   };

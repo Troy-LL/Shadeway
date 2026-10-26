@@ -36,7 +36,7 @@ function pilot(): PilotData {
     ],
   };
   const graph: GraphFile = { version: 1, area: "bgc", edges: [] };
-  return { manifest: manifest(), graph, tiles: [], buildings: [building], roads: [], places: [], attribution: manifest().attribution };
+  return { manifest: manifest(), graph, tiles: [], buildings: [building], roads: [], land: [], places: [], attribution: manifest().attribution };
 }
 
 function fakeView(): MapView & {
@@ -55,6 +55,8 @@ function fakeView(): MapView & {
     markers: { start: null as LngLat | null, end: null as LngLat | null },
     tap: null as ((position: LngLat) => void) | null,
     setRoads() {},
+    setLand() {},
+    setLabels() {},
     setDeck(scene: DeckScene) {
       view.scene = scene;
     },
@@ -102,6 +104,7 @@ describe("MapController", () => {
     expect(view.fitted).toBe(1);
     expect(view.durations.at(-1)).toBeLessThan(400);
     controller.setViewMode("2d");
+    expect(view.scene?.buildings).toEqual([]);
     expect(view.scene?.extruded).toBe(false);
     expect(view.cameras.at(-1)?.pitch).toBe(0);
     expect(view.durations.at(-1)).toBeLessThanOrEqual(350);

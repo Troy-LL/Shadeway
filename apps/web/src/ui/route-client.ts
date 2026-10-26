@@ -70,24 +70,79 @@ export function createRouteClient(): RouteClient {
   };
 }
 
+const SNAP_TO_MAIN_M = 80;
+
 export function nearestNode(graph: PilotData["graph"], point: readonly [number, number]): NodeId {
-  let best = 0;
-  let bestDistance = Infinity;
+  const main = mainComponent(graph);
+  const snapped = closest(graph, point, main);
+  if (snapped && snapped.meters <= SNAP_TO_MAIN_M) return snapped.id;
+  return closest(graph, point, null)?.id ?? 0;
+}
+
+function closest(
+  graph: PilotData["graph"],
+  point: readonly [number, number],
+  allow: ReadonlySet<NodeId> | null,
+): { id: NodeId; meters: number } | null {
+  let best: NodeId | null = null;
+  let bestMeters = Infinity;
   for (const edge of graph.edges) {
     const ends: readonly (readonly [NodeId, readonly [number, number] | undefined])[] = [
       [edge.from, edge.geometry[0]],
       [edge.to, edge.geometry[edge.geometry.length - 1]],
     ];
     for (const [id, at] of ends) {
-      if (!at) continue;
-      const distance = (at[0] - point[0]) ** 2 + (at[1] - point[1]) ** 2;
-      if (distance < bestDistance) {
-        bestDistance = distance;
+      if (!at || (allow && !allow.has(id))) continue;
+      const meters = metersBetween(at, point);
+      if (meters < bestMeters) {
+        bestMeters = meters;
         best = id;
       }
     }
   }
-  return best;
+  return best === null ? null : { id: best, meters: bestMeters };
+}
+
+function mainComponent(graph: PilotData["graph"]): Set<NodeId> {
+  const adj = new Map<NodeId, NodeId[]>();
+  const touch = (id: NodeId) => {
+    const list = adj.get(id);
+    if (list) return list;
+    const created: NodeId[] = [];
+    adj.set(id, created);
+    return created;
+  };
+  for (const edge of graph.edges) {
+    touch(edge.from).push(edge.to);
+    touch(edge.to).push(edge.from);
+  }
+  const seen = new Set<NodeId>();
+  let largest = new Set<NodeId>();
+  for (const start of adj.keys()) {
+    if (seen.has(start)) continue;
+    const component = new Set<NodeId>();
+    const stack = [start];
+    seen.add(start);
+    while (stack.length > 0) {
+      const id = stack.pop();
+      if (id === undefined) continue;
+      component.add(id);
+      for (const next of adj.get(id) ?? []) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        stack.push(next);
+      }
+    }
+    if (component.size > largest.size) largest = component;
+  }
+  return largest;
+}
+
+function metersBetween(a: readonly [number, number], b: readonly [number, number]): number {
+  const lat = (((a[1] + b[1]) / 2) * Math.PI) / 180;
+  const x = (a[0] - b[0]) * 111_320 * Math.cos(lat);
+  const y = (a[1] - b[1]) * 110_540;
+  return Math.hypot(x, y);
 }
 
 function isOutbound(value: unknown): value is Outbound {

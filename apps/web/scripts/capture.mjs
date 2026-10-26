@@ -44,6 +44,7 @@ try {
   await rm(resolve(outDir, "3d-compare.png"), { force: true });
   await rm(resolve(outDir, "in-route.png"), { force: true });
 
+  if (process.env.SHOTS_ONLY !== "1") {
   const measure = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const measurePage = await measure.newPage();
   const transferred = [];
@@ -123,6 +124,8 @@ try {
   await client.send("Emulation.setCPUThrottlingRate", { rate: 1 });
   console.log(JSON.stringify({ weight, routes, samples, transferred: transferred.length }, null, 2));
   await measure.close();
+  }
+  await exercise(browser);
 
   for (const size of [
     { name: "phone", width: 390, height: 844, deviceScaleFactor: 2 },
@@ -148,41 +151,89 @@ async function shoot(browser, size, scheme) {
   await page.goto(`http://127.0.0.1:${port}`, { waitUntil: "networkidle" });
   await page.waitForSelector(".maplibregl-canvas", { timeout: 30_000 });
   await page.waitForFunction(() => window.__shadeway?.places?.length, null, { timeout: 60_000 });
-  const prefix = await page.evaluate(() => {
-    const place = window.__shadeway.places.find((item) => /high street/i.test(item.name)) ?? window.__shadeway.places[0];
-    return place.name.slice(0, 4);
-  });
-  await page.click(".sheet-grabber");
-  await page.locator(".search-field").fill(prefix);
-  await page.waitForSelector(".suggest__option");
   const suffix = scheme === "dark" ? "-dark" : "";
-  if (scheme === "light") await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-search.png`) });
+  await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-search${suffix}.png`) });
   await page.evaluate((from) => window.__shadeway.pick(from), shotWalk.from);
   await page.evaluate((to) => window.__shadeway.pick(to), shotWalk.to);
   await page.waitForSelector(".route-card__sun", { timeout: 30_000 });
   await setSlot(page, "12", "12:00");
-  if (scheme === "dark") {
-    await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-compare-3d-dark.png`) });
-    await context.close();
-    return;
-  }
   await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-compare-3d${suffix}.png`) });
   await page.getByRole("button", { name: "2D" }).click();
   await page.waitForTimeout(800);
-  await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-compare-2d.png`) });
-  await setSlot(page, "6", "09:00");
-  await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-compare-0900.png`) });
-  await setSlot(page, "18", "15:00");
-  await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-compare-1500.png`) });
+  await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-compare-2d${suffix}.png`) });
+  if (scheme === "light") {
+    await setSlot(page, "6", "09:00");
+    await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-compare-0900.png`) });
+    await setSlot(page, "18", "15:00");
+    await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-compare-1500.png`) });
+  }
   await page.getByRole("button", { name: "3D" }).click();
   await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Start" }).click();
   await page.waitForSelector(".in-route-screen");
   await page.waitForTimeout(800);
-  await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-in-route.png`) });
+  await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-in-route${suffix}.png`) });
   const text = await page.locator(".route-card, .in-route-screen").allTextContents();
   console.log(size.name, text.join(" | "));
   await context.close();
+}
+
+async function exercise(browser) {
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const page = await phone.newPage();
+  page.on("pageerror", (error) => console.error(error));
+  await page.goto(`http://127.0.0.1:${port}`, { waitUntil: "networkidle" });
+  await page.waitForFunction(() => window.__shadeway?.places?.length, null, { timeout: 60_000 });
+  const phoneSheet = await page.locator(".shadeway-sheet").boundingBox();
+  if (!phoneSheet || phoneSheet.width < 370) throw new Error(`phone sheet width ${phoneSheet?.width}`);
+  await page.locator(".search-field").fill("boni");
+  await page.waitForSelector(".suggest__option");
+  const suggestion = await page.locator(".suggest__option").first().innerText();
+  if (suggestion !== "Bonifacio High Street") throw new Error(`search rank ${suggestion}`);
+  await page.locator(".suggest__option").first().click();
+  await page.getByRole("button", { name: "Market! Market!", exact: true }).click();
+  await page.waitForSelector(".route-card__sun", { timeout: 30_000 });
+  await setSlot(page, "12", "12:00");
+  const titles = await page.locator(".route-card__title").allTextContents();
+  if (titles.join(",") !== "Fastest,Balanced,Shadiest") throw new Error(`card order ${titles.join(",")}`);
+  await setSlot(page, "6", "09:00");
+  const at9 = await page.locator(".route-card__sun").allTextContents();
+  await setSlot(page, "18", "15:00");
+  const at15 = await page.locator(".route-card__sun").allTextContents();
+  if (at9.join("|") === at15.join("|")) throw new Error(`sun minutes did not change ${at9.join("|")}`);
+  await page.getByRole("button", { name: "Now", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector(".time-scrubber__label")?.textContent === "Now");
+  await page.getByRole("button", { name: "2D" }).click();
+  await page.getByRole("button", { name: "3D" }).click();
+  await setSlot(page, "12", "12:00");
+  await page.getByRole("button", { name: "Start" }).click();
+  await page.waitForSelector(".in-route-banner");
+  const before = await page.locator(".in-route-banner").innerText();
+  await page.waitForFunction(
+    (start) => document.querySelector(".in-route-banner")?.textContent !== start,
+    before,
+    { timeout: 20_000 },
+  );
+  const after = await page.locator(".in-route-banner").innerText();
+  await page.getByRole("button", { name: "End" }).click();
+  await page.waitForSelector(".search-field");
+  await page.mouse.click(180, 220);
+  await page.waitForSelector(".shadeway-marker--start");
+  await page.evaluate(() => window.__shadeway.pick([121.0, 14.5]));
+  await page.waitForFunction(() => document.body.innerText.includes("Outside the pilot area"));
+  await phone.close();
+
+  const desktop = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const wide = await desktop.newPage();
+  await wide.goto(`http://127.0.0.1:${port}`, { waitUntil: "networkidle" });
+  await wide.waitForSelector(".shadeway-sheet");
+  await wide.locator(".sheet-grabber").click();
+  const wideSheet = await wide.locator(".shadeway-sheet").boundingBox();
+  if (!wideSheet || wideSheet.width < 400 || wideSheet.width > 440 || wideSheet.height < 600) {
+    throw new Error(`desktop sheet ${wideSheet?.width}x${wideSheet?.height}`);
+  }
+  await desktop.close();
+  console.log(JSON.stringify({ phoneSheet, wideSheet, titles, at9, at15, before, after }));
 }
 
 async function setSlot(page, value, label) {

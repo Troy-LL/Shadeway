@@ -133,6 +133,19 @@ describe("synthetic graph", () => {
     });
 
     expect(routes.fastest?.edgeIds).toEqual([10]);
+    const back = route({
+      graph: { version: 1, area: "fixture", edges },
+      tiles: copies(samples),
+      day: sunDay(),
+      departure,
+      start: 2,
+      end: 1,
+    });
+    expect(back.fastest?.edgeIds).toEqual([10]);
+    expect(back.fastest?.geometry).toEqual([
+      [2 / 1000, 0],
+      [1 / 1000, 0],
+    ]);
     expect(routes.balanced?.edgeIds).toEqual([20, 21]);
     expect(routes.shadiest?.edgeIds).toEqual([30, 31]);
     expect(routes.fastest?.sunSeconds).toBeGreaterThan(routes.shadiest?.sunSeconds ?? 0);

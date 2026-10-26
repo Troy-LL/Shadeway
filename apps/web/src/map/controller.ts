@@ -13,6 +13,7 @@ import {
   type RouteDraw,
 } from "./scene";
 import { createMapLibreView, type CameraMove, type MapView } from "./view";
+import { COPY } from "../ui/copy";
 
 export type MapViewMode = "2d" | "3d";
 
@@ -32,6 +33,7 @@ export interface MapController {
   setSlot(slot: SlotIndex): void;
   fitRoute(): void;
   followPosition(enabled: boolean): void;
+  setFollowFraction(fraction: number): void;
   setStartMarker(position: LngLat | null): void;
   setEndMarker(position: LngLat | null): void;
   setPilotBox(visible: boolean): void;
@@ -71,12 +73,16 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
   let activeWeight: RouteWeight = "shadiest";
   const stored = new Map<RouteWeight, readonly LngLat[]>();
   let following = false;
+  let followFraction = 0;
   let start: LngLat | null = null;
   let end: LngLat | null = null;
 
-  const attribution = document.createElement("p");
+  const attribution = document.createElement("div");
   attribution.className = "shadeway-attribution";
-  attribution.textContent = ATTRIBUTION.join(" · ");
+  let attributionLines: readonly string[] = ATTRIBUTION;
+  const paintAttribution = () => renderAttribution(attribution, attributionLines);
+  paintAttribution();
+  window.matchMedia("(max-width: 720px)").addEventListener("change", paintAttribution);
   const toggle = renderToggle(mode, (next) => controller.setViewMode(next));
   const message = document.createElement("div");
   message.className = "shadeway-map-message";
@@ -120,9 +126,15 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
       moveCamera(true);
     },
     followPosition(enabled) {
+      const changed = following !== enabled;
       following = enabled;
+      if (!enabled) followFraction = 0;
       toggle.style.top = enabled ? "76px" : "12px";
-      moveCamera(false);
+      if (changed) moveCamera(false);
+    },
+    setFollowFraction(fraction) {
+      followFraction = Math.min(1, Math.max(0, fraction));
+      if (following) moveCamera(false);
     },
     setStartMarker(position) {
       start = position;
@@ -166,8 +178,10 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
       resolveReady(null);
       return;
     }
-    attribution.textContent = pilot.attribution.join(" · ");
+    attributionLines = pilot.attribution;
+    paintAttribution();
     view.setRoads(pilot.roads);
+    view.setLand(pilot.land);
     draw();
     moveCamera(false);
     resolveReady(pilot);
@@ -188,19 +202,20 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
     const shadows = shadowDraws(near, sun);
     const route = coordinates.length >= 2 ? paintRoute(coordinates, pilot.graph.edges, shadows) : EMPTY_ROUTE;
     view.setDeck({
-      buildings: pilot.buildings,
+      buildings: mode === "3d" ? pilot.buildings : [],
       extruded: mode === "3d",
       shadows,
       route,
       light: sunLightDirection(sun),
     });
+    view.setLabels(mode === "2d" ? spacedLabels(pilot.places) : []);
   }
 
   function moveCamera(fit: boolean): void {
     const coordinates = stored.get(activeWeight) ?? [];
     const overview = overviewCamera(mode);
     if (following && coordinates.length >= 2) {
-      const along = pointAlong(coordinates, 0.42);
+      const along = pointAlong(coordinates, followFraction);
       if (!along) return;
       const camera: CameraMove =
         mode === "3d"
@@ -226,6 +241,7 @@ export function createNoopMapController(): MapController {
     setSlot() {},
     fitRoute() {},
     followPosition() {},
+    setFollowFraction() {},
     setStartMarker() {},
     setEndMarker() {},
     setPilotBox() {},
@@ -236,6 +252,30 @@ export function createNoopMapController(): MapController {
       return () => {};
     },
   };
+}
+
+function spacedLabels(places: PilotData["places"]): { name: string; at: LngLat }[] {
+  const ranked = [...places].sort((a, b) => labelRank(a.name) - labelRank(b.name) || a.name.localeCompare(b.name));
+  const picked: { name: string; at: LngLat }[] = [];
+  for (const place of ranked) {
+    if (picked.some((kept) => labelNear(kept.at, place.at))) continue;
+    picked.push({ name: place.name, at: place.at });
+    if (picked.length >= 14) break;
+  }
+  return picked;
+}
+
+function labelRank(name: string): number {
+  const key = name.toLowerCase();
+  if (key === "bonifacio high street") return 0;
+  if (key === "market! market!") return 1;
+  return 2;
+}
+
+function labelNear(a: LngLat, b: LngLat): boolean {
+  const dx = (a[0] - b[0]) * Math.cos((14.55 * Math.PI) / 180);
+  const dy = a[1] - b[1];
+  return dx * dx + dy * dy < 0.0007 * 0.0007;
 }
 
 function overviewCamera(mode: MapViewMode): CameraMove {
@@ -280,8 +320,37 @@ function webglAvailable(): boolean {
 
 function sheetPadding(): { top: number; right: number; bottom: number; left: number } {
   const sheet = document.querySelector(".shadeway-sheet");
-  const bottom = sheet instanceof HTMLElement ? Math.round(sheet.getBoundingClientRect().height + 24) : 120;
-  return { top: 72, right: 28, bottom, left: 28 };
+  if (!(sheet instanceof HTMLElement)) return { top: 72, right: 28, bottom: 120, left: 28 };
+  const rect = sheet.getBoundingClientRect();
+  const floating = rect.width < window.innerWidth - 48;
+  if (floating) return { top: 72, right: 28, bottom: 24, left: Math.round(rect.right + 16) };
+  return { top: 72, right: 28, bottom: Math.round(rect.height + 24), left: 28 };
+}
+
+function renderAttribution(host: HTMLElement, lines: readonly string[]): void {
+  const narrow = window.matchMedia("(max-width: 720px)").matches;
+  host.replaceChildren();
+  if (!narrow) {
+    host.textContent = lines.join(" · ");
+    return;
+  }
+  const line = document.createElement("span");
+  line.textContent = COPY.attributionShort;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "shadeway-attribution__info";
+  button.textContent = "i";
+  button.setAttribute("aria-label", COPY.sources);
+  button.setAttribute("aria-expanded", "false");
+  const full = document.createElement("p");
+  full.className = "shadeway-attribution__full";
+  full.hidden = true;
+  full.textContent = lines.join(" · ");
+  button.addEventListener("click", () => {
+    full.hidden = !full.hidden;
+    button.setAttribute("aria-expanded", full.hidden ? "false" : "true");
+  });
+  host.append(line, button, full);
 }
 
 function mountCanvas(root: HTMLElement): HTMLElement {
@@ -332,7 +401,10 @@ function watchSheet(attribution: HTMLElement, onDetent: () => void): void {
   const place = () => {
     const sheet = document.querySelector(".shadeway-sheet");
     const height = sheet instanceof HTMLElement ? sheet.getBoundingClientRect().height : 0;
-    attribution.style.bottom = `${Math.round(height + 10)}px`;
+    const floating = sheet instanceof HTMLElement && sheet.getBoundingClientRect().width < window.innerWidth - 48;
+    const rect = sheet instanceof HTMLElement ? sheet.getBoundingClientRect() : null;
+    attribution.style.bottom = floating || !rect ? "16px" : `${Math.round(height + 10)}px`;
+    attribution.style.left = floating && rect ? `${Math.round(rect.right + 12)}px` : "10px";
   };
   const seen = new WeakSet<HTMLElement>();
   const attach = () => {
@@ -366,6 +438,9 @@ const MAP_CSS = `
   position: absolute;
   left: 10px;
   z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   max-width: min(420px, 70vw);
   margin: 0;
   padding: 4px 8px;
@@ -374,6 +449,40 @@ const MAP_CSS = `
   color: #5b6570;
   font: 13px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
   pointer-events: none;
+}
+@media (max-width: 720px) {
+  .shadeway-attribution {
+    max-width: min(280px, calc(100vw - 24px));
+    font-size: 12px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .shadeway-attribution__info {
+    pointer-events: auto;
+    width: 44px;
+    height: 44px;
+    margin: -10px -6px -10px 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font: 600 15px/44px system-ui, -apple-system, "Segoe UI", sans-serif;
+    cursor: pointer;
+  }
+  .shadeway-attribution__full {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + 6px);
+    width: min(280px, 70vw);
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.94);
+    color: #14202b;
+    font: 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
+    white-space: normal;
+    pointer-events: none;
+  }
 }
 .shadeway-view-toggle {
   position: absolute;
@@ -425,12 +534,23 @@ const MAP_CSS = `
 }
 .shadeway-marker--start { background: #14202b; }
 .shadeway-marker--end { background: #0a84ff; }
+.shadeway-place-label {
+  font: 600 12px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #14202b;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: -1px 0 #fff, 1px 0 #fff, 0 -1px #fff, 0 1px #fff, 0 0 3px #fff;
+}
 @media (prefers-color-scheme: dark) {
-  .shadeway-attribution, .shadeway-map-message, .shadeway-view-toggle {
+  .shadeway-attribution, .shadeway-map-message, .shadeway-view-toggle, .shadeway-attribution__full {
     background: rgba(28, 32, 38, 0.92);
     color: #f5f7fa;
   }
   .shadeway-view-toggle button { color: #f5f7fa; }
   .shadeway-view-toggle button[aria-pressed="true"] { color: #fff; }
+  .shadeway-place-label {
+    color: #f5f7fa;
+    text-shadow: -1px 0 #14181d, 1px 0 #14181d, 0 -1px #14181d, 0 1px #14181d, 0 0 3px #14181d;
+  }
 }
 `;

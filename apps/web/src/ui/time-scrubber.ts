@@ -22,7 +22,7 @@ export function renderTimeScrubber(options: TimeScrubberOptions): HTMLElement {
   const nowButton = document.createElement("button");
   nowButton.type = "button";
   nowButton.className = "time-scrubber__now chip";
-  nowButton.textContent = COPY.leaveNow;
+  nowButton.textContent = COPY.now;
   nowButton.addEventListener("click", () => options.onSnapNow());
 
   const slider = document.createElement("input");
@@ -43,7 +43,7 @@ export function renderTimeScrubber(options: TimeScrubberOptions): HTMLElement {
 
   const label = document.createElement("span");
   label.className = "time-scrubber__label";
-  label.textContent = options.departureIsNow ? COPY.leaveNow : formatSlotLabel(options.slot);
+  label.textContent = options.departureIsNow ? COPY.now : formatSlotLabel(options.slot);
 
   root.append(nowButton, slider, label);
   return root;

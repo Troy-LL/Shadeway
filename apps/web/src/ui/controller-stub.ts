@@ -9,6 +9,7 @@ export function createNoopMapController(): MapController {
     setSlot() {},
     fitRoute() {},
     followPosition() {},
+    setFollowFraction() {},
     setStartMarker() {},
     setEndMarker() {},
     setPilotBox() {},

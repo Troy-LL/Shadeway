@@ -5,6 +5,7 @@ export const ROUTE_ESTIMATE_LABEL = "Building-only estimate, no trees";
 export const COPY = {
   whereTo: "Where to?",
   leaveNow: "Leave now",
+  now: "Now",
   shadiest: "Shadiest",
   balanced: "Balanced",
   fastest: "Fastest",
@@ -20,6 +21,9 @@ export const COPY = {
   sunIsDown: "Sun is down. Showing the shortest walk.",
   couldNotLoadShade: "Could not load shade",
   sameRouteAsFastest: "Same route as Fastest",
+  keepGoing: "Keep going",
+  attributionShort: "© OpenStreetMap, Overture, Google",
+  sources: "Sources",
 } as const;
 
 export const PILOT_DESTINATIONS = {

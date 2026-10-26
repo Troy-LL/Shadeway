@@ -25,7 +25,7 @@ Shadeway is a static web app plus an offline data pipeline. Stack and hosting ar
 5. The worker runs A* with cost from [001](decisions/001-one-shared-shade-model.md) at three weights: fastest, balanced, shadiest. The slot used for an edge is the slot the walker reaches it, from the chosen departure time.
 6. The map draws the chosen route and, for the corridor around it, shadow polygons computed by `packages/shade-model` for the departure slot. 3D uses extruded buildings and sun lighting from the same sun position.
 
-Basemap: `build:pilot` writes `data/build/bgc/basemap.geojson`, one static GeoJSON file of the walking graph and the building footprints for the pilot box. It is not a vector-tile archive. A PMTiles or MVT extract was not built: the pipeline does not download a planet basemap and has no vector-tile encoder. `apps/web` can load this GeoJSON, or keep a public OpenStreetMap-based style in dev. Attribution is shown on the map from the tile manifest.
+Basemap: `build:pilot` writes `data/build/bgc/basemap.geojson`, one static GeoJSON file of the walking graph, the building footprints, and OpenStreetMap parks and water for the pilot box. It is not a vector-tile archive. A PMTiles or MVT extract was not built: the pipeline does not download a planet basemap and has no vector-tile encoder. `apps/web` can load this GeoJSON, or keep a public OpenStreetMap-based style in dev. Attribution is shown on the map from the tile manifest.
 
 ## Data sources
 
@@ -69,7 +69,9 @@ Scope: BGC, building shadows plus covered and bridge handling, 2D route with sha
 - 3 screens exist: Search, Compare, In-route, with the states in [design.md](design.md).
 - Shadow polygons and tile values agree on every fixture edge, 0 fixture edges differ by more than 0.10 sun fraction.
 - Initial page load plus pilot tiles transfer 5 MB or less.
-- 20 walked segments are logged and scored. The README states the match rate, or states that no rate is claimed yet. The label "Building-only estimate, no trees" is on all 3 route cards.
+- 20 walked segments are logged and scored. The README states the match rate, or states that no rate is claimed yet. The label "Building-only estimate, no trees" is on the three Compare cards and the In-route sheet.
+
+Counted on 2026-10-26: 6 of 8 met. Those six are engineering bars. `build:pilot` has not run in CI, so that engineering bar is unmet. The only truth bar is 20 walked segments scored, and it is unmet. README states that no match rate is claimed.
 
 ### Phase two: canopy and 3D polish
 
@@ -145,3 +147,4 @@ Later tracks, split when phase one lands: canopy ingest and shade-model transmit
 ## History
 
 - 2026-10-26: Phase one dropped the bar "Deployed to a Cloudflare Pages preview URL that returns 200". Shadeway runs locally and is not deployed. The preview workflow and its Cloudflare secrets are removed. Eight phase one bars remain.
+- 2026-10-26: README and this file count 6 of 8 phase one bars met. Six are engineering bars. The pilot-build CI bar is unmet. The walked-segment bar is the truth bar and is unmet. The building-only label is on Compare and In-route.
