@@ -54,6 +54,36 @@ export async function fetchOsm(box: BBox): Promise<OsmExtract> {
 out body;
 >;
 out skel qt;`;
+  const payload = await overpass(query);
+  const parsed = readOverpass(payload);
+  return {
+    endpoint: payload.endpoint,
+    osmTimestamp: payload.osm3s?.timestamp_osm_base ?? "unknown",
+    ways: parsed.ways,
+    treePoints: parsed.treePoints,
+  };
+}
+
+export async function fetchNamedPlaces(box: BBox): Promise<{ name: string; lon: number; lat: number }[]> {
+  const query = `[out:json][timeout:90];
+(
+  node["name"]["amenity"](${box.south},${box.west},${box.north},${box.east});
+  node["name"]["shop"](${box.south},${box.west},${box.north},${box.east});
+  node["name"]["tourism"](${box.south},${box.west},${box.north},${box.east});
+  node["name"]["leisure"](${box.south},${box.west},${box.north},${box.east});
+);
+out body;`;
+  const payload = await overpass(query);
+  const places = [];
+  for (const element of payload.elements) {
+    const name = element.tags?.name?.trim();
+    if (element.type !== "node" || !name || element.lon === undefined || element.lat === undefined) continue;
+    places.push({ name, lon: element.lon, lat: element.lat });
+  }
+  return places;
+}
+
+async function overpass(query: string): Promise<OverpassPayload & { endpoint: string }> {
   const errors: string[] = [];
   for (const endpoint of overpassEndpoints) {
     try {
@@ -70,13 +100,7 @@ out skel qt;`;
         continue;
       }
       const payload = (await response.json()) as OverpassPayload;
-      const parsed = readOverpass(payload);
-      return {
-        endpoint,
-        osmTimestamp: payload.osm3s?.timestamp_osm_base ?? "unknown",
-        ways: parsed.ways,
-        treePoints: parsed.treePoints,
-      };
+      return { ...payload, endpoint };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`${endpoint} ${message}`);

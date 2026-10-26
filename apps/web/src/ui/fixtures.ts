@@ -14,6 +14,9 @@ export const DEMO_ROUTES: readonly RouteCardModel[] = [
     sunMinutes: 4,
     segments: DEMO_SEGMENTS,
     confidence: "Estimate",
+    geometry: [],
+    distanceM: 0,
+    edgeKey: "shadiest",
   },
   {
     weight: "balanced",
@@ -21,6 +24,9 @@ export const DEMO_ROUTES: readonly RouteCardModel[] = [
     sunMinutes: 7,
     segments: DEMO_SEGMENTS,
     confidence: "Estimate",
+    geometry: [],
+    distanceM: 0,
+    edgeKey: "balanced",
   },
   {
     weight: "fastest",
@@ -28,6 +34,9 @@ export const DEMO_ROUTES: readonly RouteCardModel[] = [
     sunMinutes: 11,
     segments: DEMO_SEGMENTS,
     confidence: "Estimate",
+    geometry: [],
+    distanceM: 0,
+    edgeKey: "fastest",
   },
 ];
 
@@ -46,6 +55,11 @@ export function defaultUiState(overrides: Partial<UiState> = {}): UiState {
     offRoute: false,
     navigationLine: "Turn left on 5th Ave · 120 m",
     recents: ["Uptown Mall", "Serendra"],
+    query: "",
+    places: [],
+    start: null,
+    end: null,
+    timePickerOpen: false,
     ...overrides,
   };
 }

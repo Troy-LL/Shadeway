@@ -112,7 +112,14 @@ function renderRouteCard(
   estimate.className = "route-card__badge";
   estimate.textContent = ROUTE_ESTIMATE_LABEL;
 
-  card.append(badge, title, total, sun, strip, estimate);
+  card.append(badge, title);
+  if (route.note) {
+    const note = document.createElement("p");
+    note.className = "route-card__note";
+    note.textContent = route.note;
+    card.append(note);
+  }
+  card.append(total, sun, strip, estimate);
   return card;
 }
 

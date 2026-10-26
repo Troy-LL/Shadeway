@@ -28,7 +28,7 @@ if (command === "measure") {
   throw new Error(`unknown command: ${command}`);
 }
 
-/** The Pages script copies `data/build/pilot/`. The area directory is `bgc`. */
+/** The pilot-build workflow uploads `data/build/pilot/`. The area directory is `bgc`. */
 async function linkPilotDir(buildRoot: string): Promise<void> {
   const link = `${buildRoot}pilot`;
   try {

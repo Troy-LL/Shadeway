@@ -1,8 +1,24 @@
 import { COPY, PILOT_DESTINATIONS } from "../copy";
-import type { UiState } from "../types";
+import { renderTimeScrubber } from "../time-scrubber";
+import type { PlacePick, UiState } from "../types";
 import { renderStatusBlock } from "./status";
 
-export function renderSearchContent(state: UiState, onDestination: (label: string) => void): HTMLElement {
+export interface SearchHandlers {
+  readonly onQuery: (query: string) => void;
+  readonly onPick: (place: PlacePick) => void;
+  readonly onDestination: (label: string) => void;
+  readonly onLeaveNow: () => void;
+  readonly onSlotChange: (slot: number) => void;
+  readonly onSnapNow: () => void;
+}
+
+export function matchPlaces(places: readonly PlacePick[], query: string): readonly PlacePick[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  return places.filter((place) => place.name.toLowerCase().includes(needle)).slice(0, 6);
+}
+
+export function renderSearchContent(state: UiState, handlers: SearchHandlers): HTMLElement {
   const container = document.createElement("div");
   container.className = "search-screen";
 
@@ -12,13 +28,44 @@ export function renderSearchContent(state: UiState, onDestination: (label: strin
     return container;
   }
 
+  if (state.start) {
+    const from = document.createElement("p");
+    from.className = "search-picked";
+    from.textContent = state.start.name;
+    container.append(from);
+  }
+
   const field = document.createElement("input");
   field.className = "search-field";
   field.type = "search";
   field.placeholder = COPY.whereTo;
   field.setAttribute("aria-label", COPY.whereTo);
-
+  field.value = state.query;
+  field.addEventListener("input", () => handlers.onQuery(field.value));
+  field.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    const first = matchPlaces(state.places, field.value)[0];
+    if (!first) return;
+    event.preventDefault();
+    handlers.onPick(first);
+  });
   container.append(field);
+
+  const matches = matchPlaces(state.places, state.query);
+  if (matches.length > 0) {
+    const list = document.createElement("div");
+    list.className = "suggest";
+    list.setAttribute("role", "listbox");
+    for (const place of matches) {
+      const option = document.createElement("button");
+      option.type = "button";
+      option.className = "suggest__option";
+      option.textContent = place.name;
+      option.addEventListener("click", () => handlers.onPick(place));
+      list.append(option);
+    }
+    container.append(list);
+  }
 
   if (state.detent !== "peek") {
     const chips = document.createElement("div");
@@ -29,7 +76,7 @@ export function renderSearchContent(state: UiState, onDestination: (label: strin
       chip.type = "button";
       chip.className = "chip";
       chip.textContent = label;
-      chip.addEventListener("click", () => onDestination(label));
+      chip.addEventListener("click", () => handlers.onDestination(label));
       chips.append(chip);
     }
 
@@ -38,9 +85,21 @@ export function renderSearchContent(state: UiState, onDestination: (label: strin
     leaveNow.className = "chip";
     leaveNow.textContent = COPY.leaveNow;
     leaveNow.setAttribute("data-action", "leave-now");
+    leaveNow.addEventListener("click", handlers.onLeaveNow);
     chips.append(leaveNow);
 
     container.append(chips);
+
+    if (state.timePickerOpen) {
+      container.append(
+        renderTimeScrubber({
+          slot: state.slot,
+          departureIsNow: state.departureIsNow,
+          onSlotChange: handlers.onSlotChange,
+          onSnapNow: handlers.onSnapNow,
+        }),
+      );
+    }
 
     if (state.recents.length > 0) {
       const recents = document.createElement("div");
@@ -55,7 +114,7 @@ export function renderSearchContent(state: UiState, onDestination: (label: strin
         chip.type = "button";
         chip.className = "chip";
         chip.textContent = recent;
-        chip.addEventListener("click", () => onDestination(recent));
+        chip.addEventListener("click", () => handlers.onDestination(recent));
         list.append(chip);
       }
       recents.append(title, list);

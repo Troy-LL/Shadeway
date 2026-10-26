@@ -6,7 +6,23 @@ Pilot area: Bonifacio Global City (BGC), Taguig, Metro Manila. A walkable grid o
 
 ## Status
 
-Docs only. No code yet. Build order and done bars are in [docs/architecture.md](docs/architecture.md).
+6 of 8 phase one bars met. Bars are listed in [docs/architecture.md](docs/architecture.md). No walked match rate is claimed: the log at `data/walks/bgc.json` has 0 segments.
+
+Met:
+
+- The Data sources section holds the 9 measured BGC counts.
+- The 3 pilot walks each return Fastest, Balanced, and Shadiest. At noon on 2026-10-26 the covered High Street walk and the Uptown footbridge are 0 minutes in sun on every weight. The tree-lined High Street walk is 8 minutes in sun on Fastest (8 min, 683 m) and 7 minutes in sun on Shadiest (13 min, 1050 m).
+- Router p95 is under 500 ms. Headless Chromium, 4x CPU throttle, one warmup, then 20 worker round trips per walk at noon. p95 is the 19th sorted sample: covered walk 12.6 ms, tree-lined walk 9.1 ms, footbridge 7.5 ms.
+- Search, Compare, and In-route run on the pilot tiles. Screenshots are in `apps/web/screenshots/`.
+- Fixture shadow polygons and tile bytes agree inside 0.10 sun fraction (`packages/pipeline` build test, compared to 0.01).
+- Built page load plus pilot files transfer under 5 MB. `vite preview` in headless Chromium, `transferSize`: 1,572,165 bytes (navigation 989, resources 1,571,176), gzip on. The dev server transferred 17,675,669 bytes in the same browser because it serves unminified modules. That number is not the bar.
+
+Not met:
+
+- `build:pilot` succeeds locally. It has not been run in CI. The manual workflow `.github/workflows/pilot-build.yml` has no completed run, and the pull-request `check` job does not build tiles.
+- 20 walked segments are not logged. 0 segments scored. The label "Building-only estimate, no trees" is on each route card.
+
+A hand comparison of the 3 walks with undercover.ph is in [docs/prior-art-comparison.md](docs/prior-art-comparison.md).
 
 ## Read this before trusting a route
 
@@ -16,21 +32,16 @@ Phase one is a **building-only estimate, no trees**, and BGC has many trees that
 
 Students and commuters who walk in Manila heat and want the shadiest sensible route, not the fastest one.
 
-## Run
+## Run locally
 
-Not runnable yet. Track 0 in [docs/architecture.md](docs/architecture.md) creates the workspace. These are the exact scripts it must provide:
+Shadeway is not deployed. Install, build the pilot tiles, then start the dev server.
 
 - Install: `pnpm install` (Node 22, pnpm 10)
 - Check: `pnpm -r typecheck` and `pnpm -r test`
-- Build pilot data: `pnpm --filter @shadeway/pipeline build:pilot` (writes `data/build/pilot/`)
-- Web dev server: `pnpm --filter @shadeway/web dev` (port 5173)
+- Pilot tiles: `pnpm --filter @shadeway/pipeline build:pilot`
+- App: `pnpm --filter @shadeway/web dev` (http://127.0.0.1:5173)
 
-## CI secrets
-
-Set these repository secrets in GitHub for Cloudflare Pages preview deploys (see `.github/workflows/deploy-preview.yml`). Do not commit values.
-
-- `CLOUDFLARE_API_TOKEN`: API token with Cloudflare Pages edit permission for the Shadeway project
-- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare account ID that owns the Pages project
+`build:pilot` reads OpenStreetMap, Overture building footprints, and the Google Open Buildings height raster, then writes `data/build/bgc/` (graph, shade tiles, basemap, place names). That directory is not committed. The dev server serves it at `/data/bgc/`. A symlink `data/build/pilot` points at the same files for the manual pilot-build workflow. Walk notes for a future scored sample live in `data/walks/bgc.json` (empty; no match rate is claimed).
 
 ## Limits
 

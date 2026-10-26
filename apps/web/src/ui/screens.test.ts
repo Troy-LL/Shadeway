@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import { COPY, ROUTE_ESTIMATE_LABEL } from "./copy";
-import { renderUiStateById } from "./render";
+import { defaultUiState } from "./fixtures";
+import { renderUiState, renderUiStateById } from "./render";
 import { UI_STATE_IDS } from "./state-fixtures";
 
 describe("UI screen states", () => {
@@ -26,6 +27,16 @@ describe("Compare route cards", () => {
     for (const badge of badges) {
       expect(badge.textContent).toBe(ROUTE_ESTIMATE_LABEL);
     }
+    document.body.replaceChildren();
+  });
+
+  it("says when the shadiest card is the same walk as the fastest", () => {
+    const routes = defaultUiState().routes.map((route) =>
+      route.weight === "shadiest" ? { ...route, note: COPY.sameRouteAsFastest } : route,
+    );
+    const root = renderUiState(defaultUiState({ screen: "compare", detent: "half", routes }));
+    document.body.append(root);
+    expect(root.querySelector(".route-card__note")?.textContent).toBe(COPY.sameRouteAsFastest);
     document.body.replaceChildren();
   });
 
@@ -64,6 +75,24 @@ describe("Status copy", () => {
 });
 
 describe("Search", () => {
+  it("filters named places from the query", () => {
+    const root = renderUiState(
+      defaultUiState({
+        screen: "search",
+        detent: "peek",
+        query: "market",
+        places: [
+          { name: "Market! Market!", at: [121.056, 14.549] },
+          { name: "Bonifacio High Street", at: [121.05, 14.551] },
+        ],
+      }),
+    );
+    document.body.append(root);
+    const suggestions = [...root.querySelectorAll(".suggest__option")].map((el) => el.textContent);
+    expect(suggestions).toEqual(["Market! Market!"]);
+    document.body.replaceChildren();
+  });
+
   it("shows Where to at peek", () => {
     const root = renderUiStateById("search-peek");
     document.body.append(root);

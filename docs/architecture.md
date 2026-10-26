@@ -5,14 +5,14 @@ Shadeway is a static web app plus an offline data pipeline. Stack and hosting ar
 ## Context
 
 - A walker opens the web app on a phone or laptop, picks a start and end inside the pilot area (BGC, Taguig), and gets three routes with their time in the sun.
-- The app loads static files from Cloudflare Pages: the web bundle, the basemap, and the shade tiles.
-- CI runs the pipeline, which reads OpenStreetMap and a canopy raster and writes the shade tiles. Nothing else talks to the network at runtime.
+- The app loads static files from the local dev server: the web bundle, the basemap, and the shade tiles.
+- A local `build:pilot` run, or the manual pilot-build workflow, writes the shade tiles. Nothing else talks to the network at runtime.
 
 ## Packages
 
 - `packages/contract` - types, tile codec, slot grid helpers. The schema owner. Read `packages/contract/src/index.ts` for field details.
 - `packages/shade-model` - sun position, shadow polygons, edge sun fraction. Pure TypeScript, runs in Node and the browser.
-- `packages/pipeline` - Node CLI. Output is `data/build/<area>/`, published with the site.
+- `packages/pipeline` - Node CLI. Output is `data/build/<area>/`, served with the local app.
 - `packages/router` - tile loader and A* in a Web Worker. No DOM.
 - `apps/web` - MapLibre GL JS and deck.gl map in `src/map`, screens in `src/ui`.
 
@@ -70,7 +70,6 @@ Scope: BGC, building shadows plus covered and bridge handling, 2D route with sha
 - Shadow polygons and tile values agree on every fixture edge, 0 fixture edges differ by more than 0.10 sun fraction.
 - Initial page load plus pilot tiles transfer 5 MB or less.
 - 20 walked segments are logged and scored. The README states the match rate, or states that no rate is claimed yet. The label "Building-only estimate, no trees" is on all 3 route cards.
-- Deployed to a Cloudflare Pages preview URL that returns 200.
 
 ### Phase two: canopy and 3D polish
 
@@ -129,11 +128,11 @@ Part A runs first and merges before part B starts shading.
 - Done: bottom sheet with three detents and keyboard access; Search, Compare, In-route screens; every state and copy string in design.md; tokens as CSS variables; the label constant and badge; reduced motion respected; touch targets 44 px or larger; a render test or screenshot for each screen and each state, 3 screens plus the listed states.
 - Fences: owns `apps/web/src/ui`; copy strings come only from design.md; no accuracy claims; no map layer code.
 
-### Track 6: CI and deploy
+### Track 6: CI
 
 - Read: [003](decisions/003-static-precompute-no-backend.md), README.md.
-- Done: CI on pull requests runs install, typecheck, test; a manual and tagged workflow runs `build:pilot` and uploads the output; Cloudflare Pages deploy with a preview URL per pull request, using the pipeline output; the secret names the owner must set are listed in README.md.
-- Fences: owns `.github/` and deploy config; no secret values in the repo; no deploy to a production domain.
+- Done: CI on pull requests runs install, typecheck, test; a manual and tagged workflow runs `build:pilot` and uploads the output. There is no deploy.
+- Fences: owns `.github/`; no secret values in the repo; no deploy.
 
 ### Track 7: integrate phase one
 
@@ -142,3 +141,7 @@ Part A runs first and merges before part B starts shading.
 - Fences: edits across packages only to fix integration; no new feature; no accuracy statement until the scorer reports.
 
 Later tracks, split when phase one lands: canopy ingest and shade-model transmittance, 3D polish, area config and extra areas.
+
+## History
+
+- 2026-10-26: Phase one dropped the bar "Deployed to a Cloudflare Pages preview URL that returns 200". Shadeway runs locally and is not deployed. The preview workflow and its Cloudflare secrets are removed. Eight phase one bars remain.

@@ -1,7 +1,8 @@
 import { mkdir } from "node:fs/promises";
 import { buildArea, type BuildReport } from "./build.js";
 import { bgcBox, googleImageryEnd, googleImageryStart, googleInferenceDate, googleManifestUrl, googleTileUrl } from "./config.js";
-import { fetchOsm } from "./osm.js";
+import { fetchNamedPlaces, fetchOsm } from "./osm.js";
+import { curatePlaces, placesFromWays } from "./places.js";
 import { loadOverrides } from "./overrides.js";
 import { loadShadeFootprints } from "./overture.js";
 import { toUtm51N } from "./project.js";
@@ -19,7 +20,16 @@ export async function buildPilot(cacheDir: string, outDir: string, overridesPath
   console.error("pilot raster");
   const grid = await loadGoogleHeightGrid();
   const overrides = await loadOverrides(overridesPath);
-  console.error(`pilot shade ways=${osm.ways.length} buildingRows=${buildings.length} partRows=${parts.length}`);
+  const named = await fetchNamedPlaces(bgcBox).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`pilot places skipped: ${message}`);
+    return [];
+  });
+  const places = curatePlaces([
+    { places: named.map((place) => ({ name: place.name, at: [place.lon, place.lat] as const })), rank: 100 },
+    { places: placesFromWays(osm.ways), rank: 40 },
+  ]);
+  console.error(`pilot shade ways=${osm.ways.length} buildingRows=${buildings.length} partRows=${parts.length} places=${places.length}`);
   return buildArea({
     area: "bgc",
     box: bgcBox,
@@ -29,6 +39,7 @@ export async function buildPilot(cacheDir: string, outDir: string, overridesPath
     overrides,
     outDir,
     rasterHeight: (record) => rasterFor(record, grid),
+    places,
     extraNotes: [
       `OpenStreetMap from ${osm.endpoint}, timestamp ${osm.osmTimestamp}.`,
       `Google height raster ${googleTileUrl} manifest ${googleManifestUrl} inference ${googleInferenceDate} imagery ${googleImageryStart} to ${googleImageryEnd}. Median of samples about 4 m apart inside the footprint.`,

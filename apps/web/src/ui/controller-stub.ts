@@ -11,6 +11,10 @@ export function createNoopMapController(): MapController {
     followPosition() {},
     setStartMarker() {},
     setEndMarker() {},
+    setPilotBox() {},
+    whenReady() {
+      return Promise.resolve(null);
+    },
     subscribeMapTap() {
       return () => {};
     },

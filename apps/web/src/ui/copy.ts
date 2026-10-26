@@ -19,6 +19,7 @@ export const COPY = {
   outsidePilot: "Outside the pilot area",
   sunIsDown: "Sun is down. Showing the shortest walk.",
   couldNotLoadShade: "Could not load shade",
+  sameRouteAsFastest: "Same route as Fastest",
 } as const;
 
 export const PILOT_DESTINATIONS = {
