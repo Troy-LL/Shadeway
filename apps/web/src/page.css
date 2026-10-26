@@ -1,0 +1,18 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #e7e1d6;
+}
+
+#map-root {
+  position: fixed;
+  inset: 0;
+}
+
+#ui-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}

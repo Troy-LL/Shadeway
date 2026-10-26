@@ -40,6 +40,9 @@ jobs:
       - name: Prepare Pages output
         run: bash .github/scripts/prepare-pages-dist.sh
 
+      - name: Install Wrangler
+        run: pnpm add -w wrangler@3.90.0
+
       - name: Publish preview to Cloudflare Pages
         id: pages
         uses: cloudflare/wrangler-action@v3
