@@ -7,11 +7,26 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "dev": "vite --port 5173 --host 127.0.0.1",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run",
+    "smoke": "node smoke.mjs"
   },
   "dependencies": {
-    "@shadeway/contract": "workspace:*"
+    "@deck.gl/core": "^9.4.0",
+    "@deck.gl/extensions": "^9.4.0",
+    "@deck.gl/layers": "^9.4.0",
+    "@deck.gl/mapbox": "^9.4.0",
+    "@shadeway/contract": "workspace:*",
+    "@shadeway/router": "workspace:*",
+    "@shadeway/shade-model": "workspace:*",
+    "maplibre-gl": "^6.16.0"
+  },
+  "devDependencies": {
+    "happy-dom": "20.0.10",
+    "playwright": "^1.64.1",
+    "vite": "^8.3.5",
+    "vitest": "5.0.5"
   }
 }

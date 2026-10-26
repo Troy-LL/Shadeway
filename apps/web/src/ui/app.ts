@@ -1,6 +1,6 @@
 import { isSlotIndex, type SlotIndex } from "@shadeway/contract";
 import { attachSheetKeyboard } from "./bottom-sheet";
-import type { MapController } from "./controller-stub";
+import type { MapController } from "../map/controller";
 import { createNoopMapController } from "./controller-stub";
 import { defaultUiState } from "./fixtures";
 import { segmentsForSlot } from "./slot-segments";

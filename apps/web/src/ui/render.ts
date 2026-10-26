@@ -1,5 +1,5 @@
 import { createUiApp } from "./app";
-import type { MapController } from "./controller-stub";
+import type { MapController } from "../map/controller";
 import { createNoopMapController } from "./controller-stub";
 import { UI_STATE_FIXTURES } from "./state-fixtures";
 import type { UiState } from "./types";

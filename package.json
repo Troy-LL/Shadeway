@@ -11,7 +11,6 @@
     "test": "pnpm -r test"
   },
   "devDependencies": {
-    "happy-dom": "20.0.10",
     "typescript": "7.0.2",
     "vitest": "5.0.5"
   }
