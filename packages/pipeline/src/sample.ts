@@ -3,6 +3,7 @@ import type { BBox } from "./edges.js";
 export type Ring = number[][];
 
 export type BuildingRecord = {
+  id?: string;
   height: number | null;
   numFloors: number | null;
   rings: Ring[];
@@ -72,6 +73,56 @@ export function footprintHasRasterHeight(grid: HeightGrid, rings: Ring[]): boole
     }
   }
   return false;
+}
+
+/** Median of about-4 m samples inside the footprint. `undefined` when no positive sample falls inside. */
+export function medianRasterHeight(grid: HeightGrid, parts: Ring[][]): number | undefined {
+  const samples: number[] = [];
+  const stride = Math.max(1, Math.round(4 / grid.pixelSize));
+  for (const rings of parts) {
+    const outer = rings[0];
+    if (outer === undefined) continue;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const pair of outer) {
+      const point = xy(pair);
+      if (point === undefined) continue;
+      if (point.x < minX) minX = point.x;
+      if (point.y < minY) minY = point.y;
+      if (point.x > maxX) maxX = point.x;
+      if (point.y > maxY) maxY = point.y;
+    }
+    if (!Number.isFinite(minX)) continue;
+    const col0 = clamp(Math.floor((minX - grid.originX) / grid.pixelSize), 0, grid.width);
+    const col1 = clamp(Math.ceil((maxX - grid.originX) / grid.pixelSize), 0, grid.width);
+    const row0 = clamp(Math.floor((grid.originY - maxY) / grid.pixelSize), 0, grid.height);
+    const row1 = clamp(Math.ceil((grid.originY - minY) / grid.pixelSize), 0, grid.height);
+    for (let row = row0; row < row1; row += stride) {
+      const y = grid.originY - (row + 0.5) * grid.pixelSize;
+      for (let col = col0; col < col1; col += stride) {
+        const value = grid.values[row * grid.width + col];
+        if (value === undefined || !Number.isFinite(value) || value === grid.nodata || value <= 0) continue;
+        const x = grid.originX + (col + 0.5) * grid.pixelSize;
+        if (!pointInRings(x, y, rings)) continue;
+        samples.push(value);
+      }
+    }
+  }
+  if (samples.length === 0) return undefined;
+  samples.sort((left, right) => left - right);
+  const mid = Math.floor(samples.length / 2);
+  const right = samples[mid];
+  if (right === undefined) return undefined;
+  if (samples.length % 2 === 1) return right;
+  const left = samples[mid - 1];
+  if (left === undefined) return right;
+  return (left + right) / 2;
+}
+
+export function ringContains(ring: readonly (readonly number[])[], x: number, y: number): boolean {
+  return pointInRing(x, y, ring as Ring);
 }
 
 function partsCentroid(parts: Ring[][]): { x: number; y: number } {

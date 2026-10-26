@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  ATTRIBUTION,
+  HEIGHT_SOURCES,
   NO_DATA_BYTE,
   REFERENCE_DAYS,
   SLOT_GRID,
@@ -7,6 +9,7 @@ import {
   decodeSunTile,
   encodeSunFraction,
   encodeSunTile,
+  isEstimatedHeight,
   nearestSlot,
   slotStartMinutes,
   sunByte,
@@ -22,6 +25,17 @@ function sampleTile(edgeCount: number): SunTile {
     sun,
   };
 }
+
+describe("attribution", () => {
+  it("names ODbL and CC BY in one constant", () => {
+    expect(HEIGHT_SOURCES).toContain("override");
+    expect(isEstimatedHeight("override")).toBe(true);
+    expect(isEstimatedHeight("osm")).toBe(false);
+    const text = ATTRIBUTION.join("\n");
+    expect(text).toContain("ODbL");
+    expect(text).toContain("CC BY 4.0");
+  });
+});
 
 describe("slot grid", () => {
   it("has 25 slots from 06:00 to 18:00", () => {

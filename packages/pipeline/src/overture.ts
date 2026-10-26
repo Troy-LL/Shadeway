@@ -10,10 +10,40 @@ import type { BuildingRecord, Ring } from "./sample.js";
 const execFileAsync = promisify(execFile);
 
 type OvertureRow = {
+  id?: string | null;
   height: number | null;
   num_floors: number | null;
   geojson: { type: string; coordinates: number[][][] | number[][][][] };
 };
+
+export async function loadShadeFootprints(
+  cacheDir: string,
+  box: BBox,
+  type: "building" | "building_part",
+): Promise<BuildingRecord[]> {
+  const jsonPath = `${cacheDir}/overture-${type}-${box.south}-${box.west}-${box.north}-${box.east}.ndjson`;
+  try {
+    await access(jsonPath);
+  } catch {
+    const duckdb = await ensureDuckdb(cacheDir);
+    const source = overtureS3.replace("type=building/", `type=${type}/`);
+    const sql = `
+INSTALL httpfs;
+LOAD httpfs;
+INSTALL spatial;
+LOAD spatial;
+CREATE OR REPLACE SECRET s (TYPE S3, PROVIDER config, KEY_ID '', SECRET '', REGION 'us-west-2');
+COPY (
+  SELECT id, height, num_floors, ST_AsGeoJSON(geometry) AS geojson
+  FROM read_parquet('${source}', hive_partitioning=true)
+  WHERE bbox.xmin < ${box.east} AND bbox.xmax > ${box.west}
+    AND bbox.ymin < ${box.north} AND bbox.ymax > ${box.south}
+) TO '${jsonPath}' (FORMAT JSON);
+`;
+    await execFileAsync(duckdb, ["-no-agent", "-c", sql], { maxBuffer: 10 * 1024 * 1024 });
+  }
+  return readBuildings(jsonPath);
+}
 
 export async function loadBuildings(cacheDir: string, box: BBox): Promise<BuildingRecord[]> {
   const jsonPath = `${cacheDir}/bgc-buildings-${box.south}-${box.west}-${box.north}-${box.east}.ndjson`;
@@ -22,6 +52,7 @@ export async function loadBuildings(cacheDir: string, box: BBox): Promise<Buildi
   } catch {
     const duckdb = await ensureDuckdb(cacheDir);
     const sql = `
+INSTALL httpfs;
 LOAD httpfs;
 INSTALL spatial;
 LOAD spatial;
@@ -65,12 +96,14 @@ async function readBuildings(jsonPath: string): Promise<BuildingRecord[]> {
     const row = JSON.parse(line) as OvertureRow;
     const geojson = typeof row.geojson === "string" ? JSON.parse(row.geojson) as OvertureRow["geojson"] : row.geojson;
     const parts = polygonsOf(geojson);
-    buildings.push({
+    const record: BuildingRecord = {
       height: row.height,
       numFloors: row.num_floors,
       rings: parts[0] ?? [],
       parts,
-    });
+    };
+    if (typeof row.id === "string" && row.id !== "") record.id = row.id;
+    buildings.push(record);
   }
   return buildings;
 }

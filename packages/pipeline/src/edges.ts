@@ -72,7 +72,13 @@ function segmentHitsBox(a: OsmNode, b: OsmNode, box: BBox): boolean {
   );
 }
 
-export function countFootpathEdges(ways: OsmWay[], box: BBox): EdgeCounts {
+export type FootpathPiece = {
+  osmWayId: number;
+  tags: Record<string, string>;
+  nodes: OsmNode[];
+};
+
+export function footpathPieces(ways: OsmWay[], box: BBox): FootpathPiece[] {
   const foot = ways.filter(isFootpathWay);
   const degree = new Map<number, number>();
   const hitting: { wayIndex: number; a: number; b: number }[] = [];
@@ -95,31 +101,43 @@ export function countFootpathEdges(ways: OsmWay[], box: BBox): EdgeCounts {
     byWay.set(segment.wayIndex, list);
   }
 
-  let footpathEdges = 0;
-  let coveredEdges = 0;
-  let pedestrianBridgeEdges = 0;
+  const pieces: FootpathPiece[] = [];
   for (const [wayIndex, segments] of byWay) {
     const way = foot[wayIndex];
     if (way === undefined) continue;
-    let edges = 0;
-    let open = false;
+    let current: OsmNode[] | undefined;
     let previousEnd = -1;
+    const close = () => {
+      if (current !== undefined && current.length >= 2) {
+        pieces.push({ osmWayId: way.id, tags: way.tags, nodes: current });
+      }
+      current = undefined;
+    };
     for (const segment of segments) {
-      if (!open || segment.a !== previousEnd) {
-        edges += 1;
-        open = true;
+      if (current === undefined || segment.a !== previousEnd) {
+        close();
+        const start = way.nodes[segment.a];
+        current = start === undefined ? [] : [start];
       }
       const end = way.nodes[segment.b];
       if (end === undefined) continue;
-      const endId = end.id;
-      if ((degree.get(endId) ?? 0) !== 2) open = false;
+      current?.push(end);
+      if ((degree.get(end.id) ?? 0) !== 2) close();
       previousEnd = segment.b;
     }
-    footpathEdges += edges;
-    if (way.tags.covered === "yes") coveredEdges += edges;
-    const bridge = way.tags.bridge;
-    if (bridge !== undefined && bridge !== "no" && bridge !== "false") pedestrianBridgeEdges += edges;
+    close();
   }
+  return pieces;
+}
 
-  return { footpathEdges, coveredEdges, pedestrianBridgeEdges };
+export function countFootpathEdges(ways: OsmWay[], box: BBox): EdgeCounts {
+  let coveredEdges = 0;
+  let pedestrianBridgeEdges = 0;
+  const pieces = footpathPieces(ways, box);
+  for (const piece of pieces) {
+    if (piece.tags.covered === "yes") coveredEdges += 1;
+    const bridge = piece.tags.bridge;
+    if (bridge !== undefined && bridge !== "no" && bridge !== "false") pedestrianBridgeEdges += 1;
+  }
+  return { footpathEdges: pieces.length, coveredEdges, pedestrianBridgeEdges };
 }
