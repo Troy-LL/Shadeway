@@ -44,6 +44,7 @@ export type BuildInput = {
   rasterHeight?: (record: BuildingRecord) => number | undefined;
   now?: Date;
   extraNotes?: readonly string[];
+  places?: readonly { name: string; at: LngLat }[];
 };
 
 export async function buildArea(input: BuildInput): Promise<BuildReport> {
@@ -119,6 +120,10 @@ export async function buildArea(input: BuildInput): Promise<BuildReport> {
   await writeFile(
     `${input.outDir}/basemap.geojson`,
     basemapGeoJson({ bbox, edges: graph.edges, buildings: casters.casters }),
+  );
+  await writeFile(
+    `${input.outDir}/places.json`,
+    `${JSON.stringify({ version: 1, places: input.places ?? [] }, null, 2)}\n`,
   );
   for (const day of REFERENCE_DAYS) {
     await writeFile(`${input.outDir}/tiles/${day}.swtl`, shaded.files[day]);

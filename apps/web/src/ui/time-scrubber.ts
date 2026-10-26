@@ -49,6 +49,18 @@ export function renderTimeScrubber(options: TimeScrubberOptions): HTMLElement {
   return root;
 }
 
+export function manilaNowMinutes(now = new Date()): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Manila",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
+  return hour * 60 + minute;
+}
+
 export function snapToNowSlot(nowMinutes: number): SlotIndex {
   const slot = nearestSlot(nowMinutes);
   if (slot !== null) return slot;

@@ -36,7 +36,7 @@ function pilot(): PilotData {
     ],
   };
   const graph: GraphFile = { version: 1, area: "bgc", edges: [] };
-  return { manifest: manifest(), graph, tiles: [], buildings: [building], roads: [], attribution: manifest().attribution };
+  return { manifest: manifest(), graph, tiles: [], buildings: [building], roads: [], places: [], attribution: manifest().attribution };
 }
 
 function fakeView(): MapView & {
@@ -70,6 +70,7 @@ function fakeView(): MapView & {
     setMarkers(start: LngLat | null, end: LngLat | null) {
       view.markers = { start, end };
     },
+    setOutline() {},
     onTap(listener: (position: LngLat) => void) {
       view.tap = listener;
     },
@@ -116,7 +117,7 @@ describe("MapController", () => {
     expect(view.markers.start).toEqual(route[0]);
     expect(view.markers.end).toEqual(route[2]);
     controller.followPosition(true);
-    expect(view.cameras.at(-1)?.pitch).toBe(58);
+    expect(view.cameras.at(-1)?.pitch).toBe(46);
     const taps: LngLat[] = [];
     const unsubscribe = controller.subscribeMapTap((position) => taps.push(position));
     view.tap?.([121.05, 14.55]);

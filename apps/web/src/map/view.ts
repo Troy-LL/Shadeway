@@ -12,7 +12,6 @@ import type { RouteDraw, ShadowDraw } from "./scene";
 
 const BUILDING = [214, 206, 194, 255] as const;
 const BUILDING_LINE = [196, 190, 180, 255] as const;
-const SHADOW = [20, 32, 43, 88] as const;
 const SHADOW_EDGE = [20, 32, 43, 190] as const;
 const SUN_LINE = [245, 165, 36, 255] as const;
 const SHADE_LINE = [31, 122, 140, 255] as const;
@@ -47,6 +46,7 @@ export interface MapView {
     durationMs: number,
   ): void;
   setMarkers(start: LngLat | null, end: LngLat | null): void;
+  setOutline(ring: readonly LngLat[] | null): void;
   onTap(listener: (position: LngLat) => void): void;
 }
 
@@ -59,13 +59,14 @@ export function createMapLibreView(root: HTMLElement): MapView {
       layers: [{ id: "land", type: "background", paint: { "background-color": "#E7E1D6" } }],
     },
     center: [121.051, 14.5522],
-    zoom: 15.2,
-    pitch: 56,
-    bearing: -24,
+    zoom: 15.6,
+    pitch: 38,
+    bearing: -28,
     attributionControl: false,
     maxPitch: 67,
     fadeDuration: 0,
   });
+  baseMap = map;
   const overlay = new MapboxOverlay({ interleaved: false, layers: [] });
   map.addControl(overlay);
   let loaded = false;
@@ -76,6 +77,7 @@ export function createMapLibreView(root: HTMLElement): MapView {
   };
   map.once("load", () => {
     map.addSource("roads", { type: "geojson", data: emptyCollection() });
+    map.addSource("outline", { type: "geojson", data: emptyCollection() });
     map.addLayer({
       id: "roads-casing",
       type: "line",
@@ -88,6 +90,13 @@ export function createMapLibreView(root: HTMLElement): MapView {
       source: "roads",
       paint: { "line-color": "#FFFFFF", "line-width": 2.5 },
     });
+    map.addLayer({
+      id: "outline",
+      type: "line",
+      source: "outline",
+      paint: { "line-color": "#0A84FF", "line-width": 2, "line-dasharray": [1.5, 1.2] },
+    });
+    paintBase();
     loaded = true;
     for (const job of queue) job();
     queue.length = 0;
@@ -96,6 +105,14 @@ export function createMapLibreView(root: HTMLElement): MapView {
 
   let startMarker: Marker | null = null;
   let endMarker: Marker | null = null;
+  let lastScene: DeckScene | null = null;
+  const theme = window.matchMedia("(prefers-color-scheme: dark)");
+  const repaint = () => {
+    paintBase();
+    if (!lastScene) return;
+    overlay.setProps({ effects: [lighting(lastScene.light)], layers: layersFor(lastScene) });
+  };
+  theme.addEventListener("change", repaint);
 
   const view: MapView = {
     setRoads(roads) {
@@ -113,6 +130,7 @@ export function createMapLibreView(root: HTMLElement): MapView {
       });
     },
     setDeck(scene) {
+      lastScene = scene;
       overlay.setProps({
         effects: [lighting(scene.light)],
         layers: layersFor(scene),
@@ -132,13 +150,32 @@ export function createMapLibreView(root: HTMLElement): MapView {
           duration: durationMs,
           pitch: camera.pitch,
           bearing: camera.bearing,
-          maxZoom: 16.8,
+          maxZoom: camera.pitch > 0 ? 16.6 : 17,
         },
       ));
     },
     setMarkers(start, end) {
       startMarker = placeMarker(map, startMarker, start, "start");
       endMarker = placeMarker(map, endMarker, end, "end");
+    },
+    setOutline(ring) {
+      const data =
+        ring && ring.length >= 2
+          ? {
+              type: "FeatureCollection" as const,
+              features: [
+                {
+                  type: "Feature" as const,
+                  properties: {},
+                  geometry: { type: "LineString" as const, coordinates: positions(ring) },
+                },
+              ],
+            }
+          : emptyCollection();
+      whenLoaded(() => {
+        const source = map.getSource("outline");
+        if (isGeoJsonSource(source)) source.setData(data);
+      });
     },
     onTap(listener) {
       map.on("click", (event) => listener([event.lngLat.lng, event.lngLat.lat]));
@@ -147,14 +184,43 @@ export function createMapLibreView(root: HTMLElement): MapView {
   return view;
 }
 
+function palette() {
+  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  return {
+    dark,
+    building: (dark ? [78, 82, 88, 255] : BUILDING) as [number, number, number, number],
+    buildingLine: (dark ? [96, 102, 110, 255] : BUILDING_LINE) as [number, number, number, number],
+    shadow: [20, 32, 43, dark ? 48 : 88] as [number, number, number, number],
+    sun: (dark ? [255, 184, 77, 255] : SUN_LINE) as [number, number, number, number],
+    shade: (dark ? [58, 160, 179, 255] : SHADE_LINE) as [number, number, number, number],
+    land: dark ? "#14181d" : "#E7E1D6",
+    road: dark ? "#4a5562" : "#FFFFFF",
+    roadCasing: dark ? "#2a3038" : "#D9D3C7",
+  };
+}
+
+function paintBase(): void {
+  const colors = palette();
+  const map = baseMap;
+  if (!map) return;
+  if (map.getLayer("land")) map.setPaintProperty("land", "background-color", colors.land);
+  if (map.getLayer("roads")) map.setPaintProperty("roads", "line-color", colors.road);
+  if (map.getLayer("roads-casing")) map.setPaintProperty("roads-casing", "line-color", colors.roadCasing);
+}
+
+let baseMap: Map | null = null;
+
 function layersFor(scene: DeckScene): Layer[] {
+  const colors = palette();
   const estimated = scene.shadows.filter((shadow) => shadow.estimated);
   const measured = scene.shadows.filter((shadow) => !shadow.estimated);
   const flat = !scene.extruded;
+  const ribbon = [...scene.route.sunny, ...scene.route.shaded];
+  const casingLines = scene.extruded ? ribbon : scene.route.sunny;
   return [
-    polygonLayer("shadows", scene.shadows.map((shadow) => shadow.ring), [...SHADOW], flat),
+    polygonLayer("shadows", scene.shadows.map((shadow) => shadow.ring), colors.shadow, flat),
     lineLayer("shadow-edge", measured.map((shadow) => shadow.ring), [...SHADOW_EDGE], 1, false, flat),
-    lineLayer("shadow-edge-estimated", estimated.map((shadow) => shadow.ring), [20, 32, 43, 150], 1, true, flat),
+    lineLayer("shadow-edge-estimated", estimated.map((shadow) => shadow.ring), [20, 32, 43, colors.dark ? 110 : 150], 1, true, flat),
     new GeoJsonLayer({
       id: "buildings",
       data: buildingCollection(scene.buildings),
@@ -163,21 +229,22 @@ function layersFor(scene: DeckScene): Layer[] {
       extruded: scene.extruded,
       wireframe: false,
       getElevation: (feature: { properties?: { heightM?: number } }) => feature.properties?.heightM ?? 0,
-      getFillColor: [...BUILDING],
-      getLineColor: [...BUILDING_LINE],
+      getFillColor: colors.building,
+      getLineColor: colors.buildingLine,
       getLineWidth: 1,
       lineWidthUnits: "pixels",
       material: {
-        ambient: 0.32,
+        ambient: colors.dark ? 0.55 : 0.32,
         diffuse: 0.9,
         shininess: 10,
         specularColor: [255, 248, 236],
       },
     }),
-    lineLayer("route-casing", scene.route.sunny, [...CASING], 12, false, flat),
-    lineLayer("route-sun", scene.route.sunny, [...SUN_LINE], 8, false, flat),
-    lineLayer("route-shade", scene.route.shaded, [...SHADE_LINE], 5, false, flat),
-    lineLayer("route-ticks", scene.route.ticks, [...TICK], 2, false, flat),
+    lineLayer("route-ink", casingLines, [20, 32, 43, 230], scene.extruded ? 22 : 14, false, true, true),
+    lineLayer("route-casing", casingLines, [...CASING], scene.extruded ? 16 : 12, false, true, true),
+    lineLayer("route-sun", scene.route.sunny, colors.sun, scene.extruded ? 10 : 8, false, true, true),
+    lineLayer("route-shade", scene.route.shaded, colors.shade, scene.extruded ? 8 : 5, false, true, true),
+    lineLayer("route-ticks", scene.route.ticks, [...TICK], 3, false, true, true),
   ];
 }
 
@@ -236,6 +303,7 @@ function lineLayer(
   width: number,
   dashed: boolean,
   flat: boolean,
+  onTop = false,
 ): GeoJsonLayer {
   return new GeoJsonLayer({
     id,
@@ -245,9 +313,11 @@ function lineLayer(
     getLineColor: color,
     getLineWidth: width,
     lineWidthUnits: "pixels",
-    lineWidthMinPixels: dashed ? 1 : width,
-    getElevation: flat ? 0 : 1.5,
-    parameters: flat ? { depthCompare: "always" } : { depthCompare: "less-equal" },
+    lineWidthMinPixels: onTop ? width : dashed ? 1 : width,
+    lineCapRounded: onTop,
+    lineJointRounded: onTop,
+    getElevation: flat ? 0 : 8,
+    parameters: onTop || flat ? { depthCompare: "always" } : { depthCompare: "less-equal" },
     ...(dashed
       ? {
           extensions: [dash],

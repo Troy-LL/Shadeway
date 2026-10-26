@@ -10,12 +10,18 @@ import {
 } from "@shadeway/contract";
 import { loadCorridor } from "@shadeway/router";
 
+export interface PilotPlace {
+  readonly name: string;
+  readonly at: LngLat;
+}
+
 export interface PilotData {
   readonly manifest: TileManifest;
   readonly graph: GraphFile;
   readonly tiles: readonly SunTile[];
   readonly buildings: readonly Building[];
   readonly roads: readonly (readonly LngLat[])[];
+  readonly places: readonly PilotPlace[];
   readonly attribution: readonly string[];
 }
 
@@ -30,6 +36,7 @@ export async function loadPilot(dataUrl = "/data/bgc/", fetchImpl: typeof fetch 
   const base = dataUrl.endsWith("/") ? dataUrl : `${dataUrl}/`;
   const manifest = await readJson<TileManifest>(fetchImpl, `${base}manifest.json`);
   const basemap = await readJson<Basemap>(fetchImpl, `${base}basemap.geojson`);
+  const places = await readPlaces(fetchImpl, `${base}places.json`);
   const { graph, tiles } = await loadCorridor(manifest, manifest.bbox, async (relativePath) => {
     const response = await fetchImpl(`${base}${relativePath}`);
     if (!response.ok) throw new PilotDataMissing();
@@ -60,8 +67,30 @@ export async function loadPilot(dataUrl = "/data/bgc/", fetchImpl: typeof fetch 
     tiles,
     buildings,
     roads,
+    places,
     attribution: manifest.attribution.length > 0 ? manifest.attribution : ATTRIBUTION,
   };
+}
+
+async function readPlaces(fetchImpl: typeof fetch, url: string): Promise<PilotPlace[]> {
+  try {
+    const file = await readJson<unknown>(fetchImpl, url);
+    if (typeof file !== "object" || file === null || !("places" in file) || !Array.isArray(file.places)) return [];
+    const places: PilotPlace[] = [];
+    for (const item of file.places) {
+      if (typeof item !== "object" || item === null) continue;
+      const record = item as { name?: unknown; at?: unknown };
+      if (typeof record.name !== "string" || !Array.isArray(record.at)) continue;
+      const lng = record.at[0];
+      const lat = record.at[1];
+      if (typeof lng !== "number" || typeof lat !== "number") continue;
+      places.push({ name: record.name, at: [lng, lat] });
+    }
+    return places;
+  } catch (error) {
+    if (error instanceof PilotDataMissing) return [];
+    throw error;
+  }
 }
 
 function lineOf(coordinates: unknown): LngLat[] | null {

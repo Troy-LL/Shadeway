@@ -25,6 +25,7 @@ Feel: Apple Maps. The map is the screen. Text is minimal and navigation is obvio
 
 - Map shows BGC, 3D, pitched.
 - Sheet at peek: a field with the placeholder "Where to?".
+- The field filters named places from the pilot build. The first pick is the start. The next pick, a chip, or a map tap sets the end and opens Compare.
 - Half detent: two pilot chips, "Bonifacio High Street" and "Market! Market!", then recents.
 - A chip "Leave now" opens a time picker on the 30 minute slot grid.
 - Primary action: choose a destination, which opens Compare.
@@ -36,6 +37,7 @@ Feel: Apple Maps. The map is the screen. Text is minimal and navigation is obvio
 - Shade strip: one bar for the route length. Shaded stretches are solid teal. Sunny stretches are amber with a diagonal hatch.
 - Selected route is drawn on the map with its shadows. Tapping another card swaps it in under 200 ms.
 - Under the cards, a slim time scrubber on the 30 minute slot grid. It starts at the chosen departure and snaps to Now. Dragging it recolors the shade strip and the shadows from precomputed slots, with no new fetch. Outside the precomputed slots it stops at the nearest one.
+- When the shadiest walk is the same route as the fastest, the Shadiest card says "Same route as Fastest".
 - Primary action: "Start". "Leave now" and the other chips are secondary.
 
 ### In-route
@@ -90,6 +92,7 @@ All strings, exact. No em dashes.
 - "Outside the pilot area"
 - "Sun is down. Showing the shortest walk."
 - "Could not load shade"
+- "Same route as Fastest"
 
 ## Tokens
 

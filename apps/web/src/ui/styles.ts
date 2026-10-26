@@ -90,6 +90,10 @@ export const UI_STYLES = `
   height: var(--sheet-peek);
 }
 
+.shadeway-sheet[data-screen="in-route"][data-detent="peek"] {
+  height: 152px;
+}
+
 .shadeway-sheet[data-detent="half"] {
   height: var(--sheet-half);
 }
@@ -189,6 +193,35 @@ export const UI_STYLES = `
 .route-card__title {
   font-size: var(--text-17);
   margin: 0 0 var(--space-2);
+}
+
+.route-card__note {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-15);
+  color: var(--color-text);
+}
+
+.search-picked {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-15);
+  color: var(--color-text-secondary);
+}
+
+.suggest {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-2);
+}
+
+.suggest__option {
+  min-height: var(--touch-min);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-17);
+  text-align: left;
 }
 
 .route-card__total {
@@ -325,7 +358,7 @@ export const UI_STYLES = `
   position: fixed;
   top: var(--space-4);
   left: var(--space-4);
-  right: var(--space-4);
+  right: 132px;
   z-index: 11;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-card);

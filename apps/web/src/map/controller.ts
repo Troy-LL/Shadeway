@@ -34,6 +34,8 @@ export interface MapController {
   followPosition(enabled: boolean): void;
   setStartMarker(position: LngLat | null): void;
   setEndMarker(position: LngLat | null): void;
+  setPilotBox(visible: boolean): void;
+  whenReady(): Promise<PilotData | null>;
   subscribeMapTap(listener: (position: LngLat) => void): () => void;
 }
 
@@ -47,12 +49,16 @@ export interface MapControllerOptions {
 }
 
 const VIEW_KEY = "shadeway-view";
-const SUN_DATE = "2026-10-26";
+export const MAP_SUN_DATE = "2026-10-26";
 const BGC: LngLat = [121.051, 14.5522];
 const EMPTY_ROUTE: RouteDraw = { sunny: [], shaded: [], ticks: [] };
 
 export function createMapController(root: HTMLElement, options: MapControllerOptions = {}): MapController {
-  const date = options.date ?? SUN_DATE;
+  const date = options.date ?? MAP_SUN_DATE;
+  let resolveReady: (value: PilotData | null) => void = () => {};
+  const ready = new Promise<PilotData | null>((resolve) => {
+    resolveReady = resolve;
+  });
   const view = (options.createView ?? createMapLibreView)(mountCanvas(root));
   const taps = new Set<(position: LngLat) => void>();
   view.onTap((position) => {
@@ -100,7 +106,7 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
       mode = next;
       persistMode(next);
       updateToggle(toggle, next);
-      moveCamera(false);
+      moveCamera((stored.get(activeWeight)?.length ?? 0) >= 2);
       draw();
     },
     setSlot(next) {
@@ -126,6 +132,23 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
       end = position;
       view.setMarkers(start, end);
     },
+    setPilotBox(visible) {
+      if (!visible || !pilot) {
+        view.setOutline(null);
+        return;
+      }
+      const [west, south, east, north] = pilot.manifest.bbox;
+      view.setOutline([
+        [west, south],
+        [east, south],
+        [east, north],
+        [west, north],
+        [west, south],
+      ]);
+    },
+    whenReady() {
+      return ready;
+    },
     subscribeMapTap(listener) {
       taps.add(listener);
       return () => taps.delete(listener);
@@ -140,12 +163,14 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
       pilot ??= await loadPilot(options.dataUrl ?? "/data/bgc/", options.fetch ?? fetch);
     } catch (error) {
       showMissing(message, error);
+      resolveReady(null);
       return;
     }
     attribution.textContent = pilot.attribution.join(" · ");
     view.setRoads(pilot.roads);
     draw();
     moveCamera(false);
+    resolveReady(pilot);
     if (options.demo) {
       try {
         await runDemo(controller, pilot, slot);
@@ -173,14 +198,13 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
 
   function moveCamera(fit: boolean): void {
     const coordinates = stored.get(activeWeight) ?? [];
-    const sun = shadeModel.sunPosition({ date, minutes: slotStartMinutes(slot) }, BGC);
-    const overview = overviewCamera(mode, sun.azimuthDeg);
+    const overview = overviewCamera(mode);
     if (following && coordinates.length >= 2) {
       const along = pointAlong(coordinates, 0.42);
       if (!along) return;
       const camera: CameraMove =
         mode === "3d"
-          ? { center: offsetBehind(along.at, along.bearing, 90), bearing: along.bearing, pitch: 58, zoom: 16.6 }
+          ? { center: offsetBehind(along.at, along.bearing, 70), bearing: along.bearing, pitch: 46, zoom: 16.8 }
           : { center: along.at, bearing: along.bearing, pitch: 0, zoom: 16.6 };
       view.ease(camera, motionMs());
       return;
@@ -188,7 +212,7 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
     if (fit) {
       const bounds = routeBounds(coordinates);
       if (!bounds) return;
-      view.fit(bounds, sheetPadding(), overview, motionMs());
+      view.fit(bounds, sheetPadding(), frameCamera(mode, coordinates), motionMs());
       return;
     }
     view.ease(overview, motionMs());
@@ -204,16 +228,25 @@ export function createNoopMapController(): MapController {
     followPosition() {},
     setStartMarker() {},
     setEndMarker() {},
+    setPilotBox() {},
+    whenReady() {
+      return Promise.resolve(null);
+    },
     subscribeMapTap() {
       return () => {};
     },
   };
 }
 
-function overviewCamera(mode: MapViewMode, azimuthDeg: number): CameraMove {
+function overviewCamera(mode: MapViewMode): CameraMove {
+  if (mode === "2d") return { center: BGC, zoom: 15.2, pitch: 0, bearing: 0 };
+  return { center: BGC, zoom: 15.6, pitch: 38, bearing: -28 };
+}
+
+function frameCamera(mode: MapViewMode, coordinates: readonly LngLat[]): CameraMove {
   if (mode === "2d") return { pitch: 0, bearing: 0 };
-  const bearing = (azimuthDeg + 140) % 360;
-  return { pitch: 52, bearing };
+  const along = pointAlong(coordinates, 0.5)?.bearing ?? -28;
+  return { pitch: 32, bearing: along - 55 };
 }
 
 function initialMode(): MapViewMode {
