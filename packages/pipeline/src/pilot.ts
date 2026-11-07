@@ -55,7 +55,7 @@ export async function buildPilot(
   const canopyWorld = canopyWorldBox(bgcBox);
   const canopyUrl = canopyPath ?? canopyTileUrl;
   const canopyGrid = await loadCanopyGrid(canopyUrl, canopyWorld);
-  const treeBuild = buildTreeCasters(canopyGrid, osm.trees, osm.treeRows);
+  const treeBuild = buildTreeCasters(canopyGrid, osm.trees);
   console.error(
     `pilot shade ways=${osm.ways.length} buildingRows=${buildings.length} partRows=${parts.length} places=${places.length} treeCrowns=${treeBuild.trees.length}`,
   );
@@ -75,7 +75,7 @@ export async function buildPilot(
     extraNotes: [
       `OpenStreetMap from ${osm.endpoint}, timestamp ${osm.osmTimestamp}.`,
       `Google height raster ${googleTileUrl} manifest ${googleManifestUrl} inference ${googleInferenceDate} imagery ${googleImageryStart} to ${googleImageryEnd}. Median of samples about 4 m apart inside the footprint.`,
-      `Meta and WRI canopy ${canopyUrl} object last modified ${canopyObjectModified}. Heights at or above 3 m vectorized to crowns; OSM natural=tree and tree_row fill gaps.`,
+      `Meta and WRI canopy ${canopyUrl} object last modified ${canopyObjectModified}. Heights at or above 3 m vectorized to crowns; OSM natural=tree points fill gaps when no raster crown is nearby.`,
     ],
   });
 }

@@ -1,7 +1,7 @@
 import type { LngLat, TreeCaster } from "@shadeway/contract";
 import { toWebMercator } from "./project.js";
 import { type CanopyGrid, crownsFromGrid } from "./canopy.js";
-import type { OsmTreePoint, OsmTreeRow } from "./osm.js";
+import type { OsmTreePoint } from "./osm.js";
 
 /** OSM `natural=tree` fallback crown radius when no raster crown is nearby. */
 export const OSM_TREE_CROWN_RADIUS_M = 4;
@@ -24,14 +24,9 @@ export type TreeBuild = {
   osmFallbackCrowns: number;
 };
 
-export function buildTreeCasters(
-  grid: CanopyGrid,
-  osmTrees: readonly OsmTreePoint[],
-  osmRows: readonly OsmTreeRow[],
-): TreeBuild {
+export function buildTreeCasters(grid: CanopyGrid, osmTrees: readonly OsmTreePoint[]): TreeBuild {
   const raster = crownsFromGrid(grid, RASTER_TREE_TRANSMITTANCE);
   const fallback: TreeCaster[] = [];
-  let osmIndex = 0;
   for (const tree of osmTrees) {
     if (nearRasterCrown(raster, tree.lon, tree.lat, OSM_TREE_SKIP_RADIUS_M)) continue;
     fallback.push({
@@ -40,20 +35,6 @@ export function buildTreeCasters(
       crownHeightM: tree.heightM ?? OSM_TREE_CROWN_HEIGHT_M,
       transmittance: OSM_TREE_TRANSMITTANCE,
     });
-    osmIndex += 1;
-  }
-  for (const row of osmRows) {
-    const crowns = crownsAlongRow(row);
-    for (const crown of crowns) {
-      if (nearRasterCrown(raster, crown.lon, crown.lat, OSM_TREE_SKIP_RADIUS_M)) continue;
-      fallback.push({
-        id: `osm-row-${row.id}-${osmIndex}`,
-        footprint: circleRing(crown.lon, crown.lat, OSM_TREE_CROWN_RADIUS_M),
-        crownHeightM: crown.heightM ?? OSM_TREE_CROWN_HEIGHT_M,
-        transmittance: OSM_TREE_TRANSMITTANCE,
-      });
-      osmIndex += 1;
-    }
   }
   return { trees: [...raster, ...fallback], rasterCrowns: raster.length, osmFallbackCrowns: fallback.length };
 }
@@ -88,27 +69,3 @@ function circleRing(lon: number, lat: number, radiusM: number, segments = 12): L
   return ring;
 }
 
-function crownsAlongRow(row: OsmTreeRow): { lon: number; lat: number; heightM?: number }[] {
-  const points: { lon: number; lat: number; heightM?: number }[] = [];
-  const spacingM = OSM_TREE_CROWN_RADIUS_M * 2.2;
-  for (let i = 1; i < row.nodes.length; i += 1) {
-    const a = row.nodes[i - 1];
-    const b = row.nodes[i];
-    if (!a || !b) continue;
-    const start = toWebMercator(a.lon, a.lat);
-    const end = toWebMercator(b.lon, b.lat);
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const length = Math.hypot(dx, dy);
-    const steps = Math.max(1, Math.ceil(length / spacingM));
-    for (let step = 0; step <= steps; step += 1) {
-      const t = step / steps;
-      const x = start.x + dx * t;
-      const y = start.y + dy * t;
-      const lon = (x / 6378137) * (180 / Math.PI);
-      const lat = (2 * Math.atan(Math.exp(y / 6378137)) - Math.PI / 2) * (180 / Math.PI);
-      points.push({ lon, lat });
-    }
-  }
-  return points;
-}

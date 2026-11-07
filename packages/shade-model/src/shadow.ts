@@ -423,11 +423,26 @@ export function edgeSunFraction(edge: Edge, shadows: readonly ShadowPolygon[], s
   if (origin === undefined) return null;
   const line = edge.geometry.map((point) => toLocal(origin, point));
   if (line.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) return null;
-  const buildingShadows = shadows.filter((shadow) => shadow.kind !== "tree");
   const treeShadows = shadows.filter((shadow) => shadow.kind === "tree");
-  const rings = buildingShadows
-    .filter((shadow) => shadow.ring.length >= 3)
-    .map((shadow) => shadow.ring.map((point) => toLocal(origin, point)));
+  if (treeShadows.length === 0) {
+    const buildingShadows = shadows.filter((shadow) => shadow.kind !== "tree");
+    const rings = buildingShadows
+      .filter((shadow) => shadow.ring.length >= 3)
+      .map((shadow) => shadow.ring.map((point) => toLocal(origin, point)));
+    let total = 0;
+    let sunLength = 0;
+    for (let i = 0; i < line.length - 1; i++) {
+      const a = line[i];
+      const b = line[i + 1];
+      if (a === undefined || b === undefined) continue;
+      const length = Math.hypot(b.x - a.x, b.y - a.y);
+      if (length === 0) continue;
+      total += length;
+      sunLength += length - shadedLength(a, b, rings);
+    }
+    if (!(total > 0)) return null;
+    return Math.min(1, Math.max(0, sunLength / total));
+  }
   let total = 0;
   let sunLength = 0;
   for (let i = 0; i < line.length - 1; i++) {
@@ -437,20 +452,16 @@ export function edgeSunFraction(edge: Edge, shadows: readonly ShadowPolygon[], s
     const length = Math.hypot(b.x - a.x, b.y - a.y);
     if (length === 0) continue;
     total += length;
-    const buildingSun = length > 0 ? 1 - shadedLength(a, b, rings) / length : 1;
-    let treeFactor = 1;
-    if (treeShadows.length > 0 && buildingSun > 0) {
-      const samples = Math.max(4, Math.ceil(length / 2));
-      let treeSum = 0;
-      for (let s = 0; s < samples; s += 1) {
-        const t = (s + 0.5) / samples;
-        const x = a.x + (b.x - a.x) * t;
-        const y = a.y + (b.y - a.y) * t;
-        treeSum += pointSunFraction(fromLocal(origin, { x, y }), treeShadows);
-      }
-      treeFactor = treeSum / samples;
+    const samples = Math.max(4, Math.ceil(length / 2));
+    for (let s = 0; s < samples; s += 1) {
+      const t0 = s / samples;
+      const t1 = (s + 1) / samples;
+      const span = (t1 - t0) * length;
+      const mid = (t0 + t1) / 2;
+      const x = a.x + (b.x - a.x) * mid;
+      const y = a.y + (b.y - a.y) * mid;
+      sunLength += span * pointSunFraction(fromLocal(origin, { x, y }), shadows);
     }
-    sunLength += length * buildingSun * treeFactor;
   }
   if (!(total > 0)) return null;
   return Math.min(1, Math.max(0, sunLength / total));

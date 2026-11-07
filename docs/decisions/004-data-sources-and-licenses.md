@@ -26,7 +26,7 @@ Overrides
 Canopy (phase two)
 - Meta and WRI 1 m canopy height. Threshold near 3 m. The imagery is about 2018 to 2020, so the UI says tree data may be out of date. BGC has had construction since, so the pilot walks check it.
 - ETH 10 m, ESA WorldCover 10 m, and Hansen 30 m are too coarse for a street and are not used.
-- OSM tree points are not used. Sta. Mesa had 12 in a 2 km box. The BGC count is measured by the pipeline and reported, and does not change this decision unless it is large.
+- OSM tree points are not used (superseded in part by [006](006-osm-tree-fallback-crowns.md) for fallback crowns only). Sta. Mesa had 12 in a 2 km box. The BGC count is measured by the pipeline and reported, and does not change this decision unless it is large.
 
 Excluded
 - GlobalBuildingAtlas: CC BY-NC 4.0, so no commercial path, and it underestimated tall buildings in a 17-building check. Not used, not as a fallback.

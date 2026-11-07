@@ -105,6 +105,46 @@ async function readLocalCanopy(path: string, world: CanopyGrid["box"]): Promise<
   };
 }
 
+export function canopyCrownRetention(grid: CanopyGrid, crowns: readonly TreeCaster[]): number {
+  const mask = new Uint8Array(grid.width * grid.height);
+  for (let row = 0; row < grid.height; row += 1) {
+    for (let col = 0; col < grid.width; col += 1) {
+      if (sampleHeight(grid, row, col) >= CANOPY_HEIGHT_THRESHOLD_M) mask[row * grid.width + col] = 1;
+    }
+  }
+  let crownPixels = 0;
+  for (const crown of crowns) {
+    for (let row = 0; row < grid.height; row += 1) {
+      for (let col = 0; col < grid.width; col += 1) {
+        const index = row * grid.width + col;
+        if (mask[index] !== 1) continue;
+        const center = cellCenter(grid, row, col);
+        if (pointInCrownFootprint(crown.footprint, center.x, center.y)) crownPixels += 1;
+      }
+    }
+  }
+  let canopyPixels = 0;
+  for (let index = 0; index < mask.length; index += 1) {
+    if (mask[index] === 1) canopyPixels += 1;
+  }
+  if (canopyPixels === 0) return 1;
+  return crownPixels / canopyPixels;
+}
+
+function pointInCrownFootprint(footprint: readonly LngLat[], x: number, y: number): boolean {
+  if (footprint.length < 3) return false;
+  const ring = footprint.map((point) => toWebMercator(point[0], point[1]));
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+    const a = ring[i];
+    const b = ring[j];
+    if (!a || !b) continue;
+    const intersects = a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y || 1e-12) + a.x;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
 export function crownsFromGrid(grid: CanopyGrid, transmittance: number): TreeCaster[] {
   const mask = new Uint8Array(grid.width * grid.height);
   for (let row = 0; row < grid.height; row += 1) {
@@ -135,7 +175,7 @@ export function crownsFromGrid(grid: CanopyGrid, transmittance: number): TreeCas
     const footprint = footprintFromCells(grid, group.cells);
     const area = polygonAreaM2(footprint);
     if (area < MIN_CROWN_AREA_M2) continue;
-    const simplified = simplifyRing(footprint, CROWN_SIMPLIFY_M);
+    const simplified = area < 200 ? footprint : simplifyRing(footprint, CROWN_SIMPLIFY_M);
     if (simplified.length < 3) continue;
     const crownHeightM = crownPeakHeight(grid, group.cells);
     crowns.push({
@@ -185,6 +225,7 @@ function splitOversizedPatches(grid: CanopyGrid, mask: Uint8Array, labels: Int32
   for (const [label, cells] of byLabel) {
     if (cells.length * pixelArea <= MAX_CROWN_PATCH_AREA_M2) continue;
     const peaks = localMaxima(grid, mask, cells);
+    if (peaks.length === 0 || peaks.length === cells.length) continue;
     const seeds = peaks.length > 1 ? peaks : gridSeeds(grid, cells, pixelArea);
     const assignments = voronoiBySeeds(cells, seeds, grid);
     for (const [subKey, subset] of assignments) {

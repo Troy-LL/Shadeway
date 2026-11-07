@@ -425,6 +425,29 @@ describe("edge sun fraction", () => {
     expect(shaded).toBeGreaterThan(0.3);
   });
 
+  it("takes the union of overlapping building and tree shade", () => {
+    const sunNoon = sun(90, 45);
+    const buildingShadows = shadeModel.shadowPolygons([building("b1", SQUARE)], sunNoon);
+    const tree = shadeModel.treeShadowPolygons(
+      [
+        {
+          id: "t1",
+          footprint: SQUARE.map(([e, n]) => lngLat(e, n)),
+          crownHeightM: HEIGHT_M,
+          transmittance: 0.35,
+        },
+      ],
+      sunNoon,
+    );
+    const combined = [...buildingShadows, ...tree];
+    const walk = edge([[2, 5], [8, 5]]);
+    const buildingOnly = shadeModel.edgeSunFraction(walk, buildingShadows, sunNoon);
+    const both = shadeModel.edgeSunFraction(walk, combined, sunNoon);
+    expect(buildingOnly).toBeCloseTo(0, 6);
+    expect(both).toBeCloseTo(0, 6);
+    expect(both).not.toBeGreaterThan(buildingOnly!);
+  });
+
   it("lowers sun along an edge crossed by a partial tree shadow", () => {
     const walk = edge([[5, 0], [15, 0]]);
     const tree = shadeModel.treeShadowPolygons(

@@ -45,7 +45,7 @@ export const COPY = {
   noMatchingPlace: "No matching place in the pilot area",
   outsidePilot: "Outside the pilot area",
   couldNotLoadShade: "Could not load shade",
-  attributionShort: "© OpenStreetMap, Overture, Google, Meta/WRI canopy",
+  attributionShort: "© OSM, Overture, Google, Meta/WRI canopy, © 2016 Maxar",
   sources: "Sources",
 } as const;
 

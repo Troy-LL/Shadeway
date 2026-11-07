@@ -5,6 +5,7 @@ import { writeArrayBuffer } from "geotiff";
 import { expect, test } from "vitest";
 import {
   CANOPY_HEIGHT_THRESHOLD_M,
+  canopyCrownRetention,
   countCanopyPixels,
   crownsFromGrid,
   loadCanopyGrid,
@@ -80,4 +81,48 @@ test("loads a synthetic canopy GeoTIFF from disk", async () => {
   const grid = await loadCanopyGrid(path, box);
   const crowns = crownsFromGrid(grid, 0.35);
   expect(crowns.length).toBeGreaterThan(0);
+});
+
+test("keeps at least one crown on a flat 60x60 m plateau", () => {
+  const origin = toWebMercator(121.05, 14.552);
+  const size = 60;
+  const values = new Float32Array(size * size).fill(9);
+  const grid = {
+    originX: origin.x,
+    originY: origin.y + size,
+    pixelSizeX: 1,
+    pixelSizeY: 1,
+    width: size,
+    height: size,
+    values,
+    box: { minX: origin.x, minY: origin.y, maxX: origin.x + size, maxY: origin.y + size },
+  };
+  const crowns = crownsFromGrid(grid, 0.35);
+  expect(crowns.length).toBeGreaterThan(0);
+  expect(canopyCrownRetention(grid, crowns)).toBeGreaterThanOrEqual(0.9);
+});
+
+test("checkerboard canopy keeps at least 90% of eligible pixels in crowns", () => {
+  const origin = toWebMercator(121.05, 14.552);
+  const size = 32;
+  const values = new Float32Array(size * size);
+  for (let row = 0; row < size; row += 1) {
+    for (let col = 0; col < size; col += 1) {
+      const block = (Math.floor(row / 4) + Math.floor(col / 4)) % 2 === 0;
+      values[row * size + col] = block ? 5 : 0;
+    }
+  }
+  const grid = {
+    originX: origin.x,
+    originY: origin.y + size,
+    pixelSizeX: 1,
+    pixelSizeY: 1,
+    width: size,
+    height: size,
+    values,
+    box: { minX: origin.x, minY: origin.y, maxX: origin.x + size, maxY: origin.y + size },
+  };
+  const crowns = crownsFromGrid(grid, 0.35);
+  expect(crowns.length).toBeGreaterThan(0);
+  expect(canopyCrownRetention(grid, crowns)).toBeGreaterThanOrEqual(0.9);
 });
