@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import { COPY, ROUTE_ESTIMATE_LABEL } from "./copy";
+import { BUILDING_ONLY_ESTIMATE_LABEL, CANOPY_ESTIMATE_LABEL, COPY, routeEstimateLabel } from "./copy";
 import { defaultUiState } from "./fixtures";
 import { renderUiState, renderUiStateById } from "./render";
 import { suggestionPlaces } from "./screens/search";
@@ -25,7 +25,7 @@ describe("Compare route cards", () => {
     expect(titles).toEqual([COPY.shadiest, COPY.fastest]);
     expect(root.querySelectorAll(".route-card__badge").length).toBe(0);
     expect(root.querySelectorAll(".sheet-estimate-label").length).toBe(1);
-    expect(root.textContent).toContain(ROUTE_ESTIMATE_LABEL);
+    expect(root.textContent).toContain(BUILDING_ONLY_ESTIMATE_LABEL);
     document.body.replaceChildren();
   });
 
@@ -173,12 +173,30 @@ describe("Search", () => {
   });
 });
 
+describe("Canopy label", () => {
+  it("shows the canopy estimate and age copy when tiles include trees", () => {
+    const root = renderUiState(
+      defaultUiState({
+        screen: "compare",
+        detent: "half",
+        canopyLoaded: true,
+        routes: defaultUiState().routes.map((route) => ({ ...route, confidence: "Estimate + canopy" })),
+      }),
+    );
+    document.body.append(root);
+    expect(root.textContent).toContain(CANOPY_ESTIMATE_LABEL);
+    expect(root.textContent).toContain("Tree data may be out of date");
+    expect(routeEstimateLabel(true)).toBe(CANOPY_ESTIMATE_LABEL);
+    document.body.replaceChildren();
+  });
+});
+
 describe("In-route", () => {
   it("shows the route overview and one sheet label", () => {
     const root = renderUiStateById("in-route-peek");
     document.body.append(root);
     expect(root.textContent).toContain(COPY.routeOverview);
-    expect(root.textContent).toContain(ROUTE_ESTIMATE_LABEL);
+    expect(root.textContent).toContain(BUILDING_ONLY_ESTIMATE_LABEL);
     expect(root.textContent).not.toContain("Keep going");
     document.body.replaceChildren();
   });

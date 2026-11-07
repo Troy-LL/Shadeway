@@ -1,6 +1,6 @@
 # Shadeway
 
-A walking router that spends less of your walk in the sun. It picks the route with the least time in direct sun, using shadows from buildings and, later, tree canopy. The map is a flat 2D view that draws the shadows along the route you chose.
+A walking router that spends less of your walk in the sun. It picks the route with the least time in direct sun, using shadows from buildings and, when pilot tiles include canopy, a satellite tree map. The map is a flat 2D view that draws building and tree shadows along the route you chose.
 
 Pilot area: Bonifacio Global City (BGC), Taguig, Metro Manila. A walkable grid of towers, covered walkways, and tree-lined streets.
 
@@ -12,11 +12,11 @@ Met:
 
 - The Data sources section holds the 9 measured BGC counts.
 - The 3 pilot walks each return Fastest, Balanced, and Shadiest. At noon on 2026-10-26 the covered High Street walk and the Uptown footbridge are 0 min in sun because the way is tagged covered or bridge in OSM, not because a shadow pass found shade. The tree-lined High Street walk is 6 minutes in sun on Fastest (6 min, 518 m) and 4 minutes in sun on Shadiest (9 min, 784 m).
-- The label "Building-only estimate, no trees" appears once per Compare and In-route sheet, with the Estimate badge in the Compare header.
+- With canopy-built tiles, the label "Estimate from buildings and a satellite tree map, not field-checked" appears once per Compare and In-route sheet, with the Estimate + canopy badge when trees loaded. Building-only tiles still show "Building-only estimate, no trees".
 - Router p95 is under 500 ms. Headless Chromium, 4x CPU throttle, one warmup, then 20 worker round trips per walk at noon. p95 is the 19th sorted sample: covered walk 18.9 ms, tree-lined walk 19.1 ms, footbridge 15.0 ms.
 - Search, Compare, and In-route run on the pilot tiles. Screenshots are in `apps/web/screenshots/`.
 - Fixture shadow polygons and tile bytes agree inside 0.10 sun fraction (`packages/pipeline` build test, compared to 0.01).
-- Built page load plus pilot files transfer under 5 MB. `vite preview` in headless Chromium, `transferSize`: 1,572,165 bytes (navigation 989, resources 1,571,176), gzip on. The dev server transferred 17,732,958 bytes in a later headless load because it serves unminified modules. That number is not the bar.
+- Built page load plus pilot files transfer under 5 MB. `vite preview` in headless Chromium, `transferSize` about 1.50 MB with a canopy pilot build. The dev server serves unminified modules and is not the bar.
 
 Not met:
 
@@ -27,7 +27,7 @@ A hand comparison of the 3 walks with undercover.ph is in [docs/prior-art-compar
 
 ## Read this before trusting a route
 
-Phase one is a **building-only estimate, no trees**, and BGC has many trees that phase one ignores. Shade in BGC is also made by things OpenStreetMap can miss or map as plain footpaths: covered walkways, skybridges, overpasses, and awnings. Each Compare sheet and In-route overview show that label once. No accuracy figure is published until 20 walked segments have been scored. See [docs/decisions/002-honest-data-labels.md](docs/decisions/002-honest-data-labels.md).
+Pilot tiles may include building-only shade or building plus satellite tree canopy (`build:pilot -- --canopy path.tif`). The UI label matches what loaded: building-only copy until canopy is in the manifest, then the approved estimate string in decision 002. Tree imagery may be out of date. BGC shade is also made by things OpenStreetMap can miss: covered walkways, skybridges, overpasses, and awnings. No accuracy figure is published until 20 walked segments have been scored. See [docs/decisions/002-honest-data-labels.md](docs/decisions/002-honest-data-labels.md).
 
 ## Who it is for
 
@@ -42,7 +42,7 @@ Shadeway is not deployed. Install, build the pilot tiles, then start the dev ser
 - Pilot tiles: `pnpm --filter @shadeway/pipeline build:pilot`
 - App: `pnpm --filter @shadeway/web dev` (http://127.0.0.1:5173)
 
-`build:pilot` reads OpenStreetMap, Overture building footprints, and the Google Open Buildings height raster, then writes `data/build/bgc/` (graph, shade tiles, basemap, place names). That directory is not committed. The dev server serves it at `/data/bgc/`. A symlink `data/build/pilot` points at the same files for the manual pilot-build workflow. Walk notes for a future scored sample live in `data/walks/bgc.json` (empty; no match rate is claimed).
+`build:pilot` reads OpenStreetMap, Overture building footprints, and the Google Open Buildings height raster, optionally a local canopy height GeoTIFF (`--canopy`), then writes `data/build/bgc/` (graph, shade tiles, basemap, place names). Optional CHM comes from `scripts/canopy-model/run_canopy.py` on RGB imagery. That directory is not committed. The dev server serves it at `/data/bgc/`. A symlink `data/build/pilot` points at the same files for the manual pilot-build workflow. Walk notes for a future scored sample live in `data/walks/bgc.json` (empty; no match rate is claimed).
 
 ## Limits
 

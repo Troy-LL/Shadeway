@@ -53,6 +53,7 @@ export function defaultUiState(overrides: Partial<UiState> = {}): UiState {
     start: null,
     end: null,
     timePickerOpen: false,
+    canopyLoaded: false,
     ...overrides,
   };
 }

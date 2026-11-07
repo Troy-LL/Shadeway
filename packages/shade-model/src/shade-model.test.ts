@@ -379,6 +379,73 @@ describe("edge sun fraction", () => {
     expect(shadeModel.edgeSunFraction(edge([[-20, 5], [30, 5]]), shadows, sun(90, 45))).toBeCloseTo(0.36, 6);
   });
 
+  it("keeps building-only sun when trees are present but do not reach the edge", () => {
+    const shadows = shadeModel.shadowPolygons([building("square", SQUARE)], sun(90, 45));
+    const buildingOnly = shadeModel.edgeSunFraction(edge([[-20, 5], [20, 5]]), shadows, sun(90, 45));
+    const treeFar = shadeModel.treeShadowPolygons(
+      [
+        {
+          id: "far",
+          footprint: SQUARE.map(([e, n]) => lngLat(e + 80, n + 80)),
+          crownHeightM: HEIGHT_M,
+          transmittance: 0.35,
+        },
+      ],
+      sun(90, 45),
+    );
+    const combined = shadeModel.edgeSunFraction(edge([[-20, 5], [20, 5]]), [...shadows, ...treeFar], sun(90, 45));
+    expect(buildingOnly).toBeCloseTo(0.5, 6);
+    expect(combined).toBeCloseTo(buildingOnly!, 6);
+  });
+
+  it("never raises sun when a tree shadow is added on an open edge", () => {
+    const open = edge([[30, 5], [60, 5]]);
+    const clear = shadeModel.edgeSunFraction(open, [], sun(90, 45));
+    const tree = shadeModel.treeShadowPolygons(
+      [
+        {
+          id: "mid",
+          footprint: [
+            lngLat(40, 0),
+            lngLat(50, 0),
+            lngLat(50, 10),
+            lngLat(40, 10),
+          ],
+          crownHeightM: HEIGHT_M,
+          transmittance: 0.35,
+        },
+      ],
+      sun(90, 45),
+    );
+    const shaded = shadeModel.edgeSunFraction(open, tree, sun(90, 45));
+    expect(clear).toBeCloseTo(1, 6);
+    expect(shaded).not.toBeNull();
+    if (shaded === null || clear === null) return;
+    expect(shaded).toBeLessThanOrEqual(clear);
+    expect(shaded).toBeGreaterThan(0.3);
+  });
+
+  it("lowers sun along an edge crossed by a partial tree shadow", () => {
+    const walk = edge([[5, 0], [15, 0]]);
+    const tree = shadeModel.treeShadowPolygons(
+      [
+        {
+          id: "crown",
+          footprint: SQUARE.map(([e, n]) => lngLat(e, n)),
+          crownHeightM: HEIGHT_M,
+          transmittance: 0.35,
+        },
+      ],
+      sun(90, 45),
+    );
+    const open = shadeModel.edgeSunFraction(walk, [], sun(90, 45));
+    const under = shadeModel.edgeSunFraction(walk, tree, sun(90, 45));
+    expect(open).toBeCloseTo(1, 6);
+    expect(under).not.toBeNull();
+    if (under === null) return;
+    expect(under).toBeLessThan(0.85);
+  });
+
   // Decision 002 puts covered and bridge shading in the pipeline, not in this fraction.
   it("leaves a covered edge at its geometric fraction", () => {
     const shadows = shadeModel.shadowPolygons([building("square", SQUARE)], sun(90, 45));

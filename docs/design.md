@@ -51,4 +51,4 @@ Flat 2D Shadeway UI per ENG-021. Mobile-first at 390x844, desktop side panel at 
 
 ## Copy
 
-Exact strings in `apps/web/src/ui/copy.ts`, including: "Available route", "Shadiest and fastest", "Shade unavailable", "Fastest walk", "Shade estimates available 06:00–18:00", "Route overview · live position unavailable", "Location off", ROUTE_ESTIMATE_LABEL.
+Exact strings in `apps/web/src/ui/copy.ts`, including: "Available route", "Shadiest and fastest", "Shade unavailable", "Fastest walk", "Shade estimates available 06:00–18:00", "Route overview · live position unavailable", "Location off", `routeEstimateLabel`, `TREE_DATA_OUT_OF_DATE`.

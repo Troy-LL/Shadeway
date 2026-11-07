@@ -10,8 +10,8 @@ import type { RouteDraw, ShadowDraw } from "./scene";
 
 const SHADOW = [20, 32, 43, 255] as const;
 const SHADOW_DARK = [0, 0, 0, 255] as const;
-const TREE_SHADOW = [86, 108, 94, 56] as const;
-const TREE_SHADOW_DARK = [120, 145, 128, 72] as const;
+const TREE_SHADOW = [72, 118, 88, 100] as const;
+const TREE_SHADOW_DARK = [110, 170, 125, 130] as const;
 const EDGE = [20, 32, 43, 255] as const;
 const EDGE_DARK = [255, 255, 255, 255] as const;
 const EDGE_EST = [20, 32, 43, 255] as const;
@@ -204,7 +204,7 @@ export function createMapLibreView(root: HTMLElement): MapView {
       id: "tree-shadows",
       type: "fill",
       source: "tree-shadows",
-      paint: { "fill-color": rgba(TREE_SHADOW), "fill-opacity": 0.14 },
+      paint: { "fill-color": rgba(TREE_SHADOW), "fill-opacity": 0.26 },
     });
     map.addLayer({
       id: "tree-shadow-edge",
@@ -510,7 +510,7 @@ function paintSceneColors(): void {
   }
   if (map.getLayer("tree-shadows")) {
     map.setPaintProperty("tree-shadows", "fill-color", rgba(colors.treeShadow));
-    map.setPaintProperty("tree-shadows", "fill-opacity", colors.dark ? 0.22 : 0.14);
+    map.setPaintProperty("tree-shadows", "fill-opacity", colors.dark ? 0.34 : 0.26);
   }
   if (map.getLayer("tree-shadow-edge")) {
     map.setPaintProperty("tree-shadow-edge", "line-color", rgba(colors.treeShadow));

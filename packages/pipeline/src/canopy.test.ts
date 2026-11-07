@@ -1,5 +1,14 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { writeArrayBuffer } from "geotiff";
 import { expect, test } from "vitest";
-import { CANOPY_HEIGHT_THRESHOLD_M, countCanopyPixels, crownsFromGrid } from "./canopy.js";
+import {
+  CANOPY_HEIGHT_THRESHOLD_M,
+  countCanopyPixels,
+  crownsFromGrid,
+  loadCanopyGrid,
+} from "./canopy.js";
 import { toWebMercator } from "./project.js";
 
 test("canopy count keeps pixels whose centers sit inside the box and are at least 3 m", () => {
@@ -44,4 +53,31 @@ test("vectorizes a synthetic canopy raster above the height threshold", () => {
   const crowns = crownsFromGrid(grid, 0.35);
   expect(crowns.length).toBeGreaterThan(0);
   expect(crowns[0]?.crownHeightM).toBeGreaterThanOrEqual(CANOPY_HEIGHT_THRESHOLD_M);
+});
+
+test("loads a synthetic canopy GeoTIFF from disk", async () => {
+  const origin = toWebMercator(121.05, 14.552);
+  const width = 6;
+  const height = 6;
+  const values = new Float32Array(width * height);
+  for (let row = 0; row < height; row += 1) {
+    for (let col = 0; col < width; col += 1) {
+      values[row * width + col] = row >= 1 && row <= 3 && col >= 1 && col <= 3 ? 5 : 0;
+    }
+  }
+  const metadata = {
+    height,
+    width,
+    ModelPixelScale: [1, 1, 0],
+    ModelTiepoint: [0, 0, 0, origin.x, origin.y + height, 0],
+    GeographicTypeGeoKey: 3857,
+  };
+  const buffer = await writeArrayBuffer(values, metadata);
+  const dir = await mkdtemp(join(tmpdir(), "shadeway-canopy-"));
+  const path = join(dir, "canopy.tif");
+  await writeFile(path, Buffer.from(buffer));
+  const box = { minX: origin.x, minY: origin.y, maxX: origin.x + width, maxY: origin.y + height };
+  const grid = await loadCanopyGrid(path, box);
+  const crowns = crownsFromGrid(grid, 0.35);
+  expect(crowns.length).toBeGreaterThan(0);
 });

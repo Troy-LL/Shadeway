@@ -28,7 +28,7 @@ python scripts/canopy-model/run_canopy.py \
   --bbox 121.0417 14.5415 121.0603 14.5628
 ```
 
-`run_canopy.py` expects `HIGHRESCANOPYHOME` (or a clone at `../HighResCanopyHeight`) and invokes the upstream inference entry point documented in that repository. It does not download imagery or weights.
+`run_canopy.py` expects `HIGHRESCANOPYHOME` (or a clone at `../HighResCanopyHeight`), loads the SSL checkpoint directly, tiles the RGB GeoTIFF in 256×256 windows, and writes a float32 CHM. It does not download imagery or weights. Requires Python `rasterio`, `numpy`, `torch`, and `torchvision`.
 
 ## Caveats
 

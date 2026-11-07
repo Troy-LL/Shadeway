@@ -392,6 +392,13 @@ export const UI_STYLES = `
   line-height: 1.35;
 }
 
+.sheet-tree-age-label {
+  margin: 0.25rem 0 0;
+  font-size: var(--text-13);
+  color: var(--color-text-secondary);
+  line-height: 1.35;
+}
+
 .route-cards {
   display: flex;
   flex-direction: column;

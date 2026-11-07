@@ -52,6 +52,7 @@ function emptyUiState(): UiState {
     start: null,
     end: null,
     timePickerOpen: false,
+    canopyLoaded: false,
   };
 }
 
@@ -507,7 +508,14 @@ export function createUiApp(
       livePilot = pilot;
       routeClient = createRouteClient();
       const slot = snapToNowSlot(manilaNowMinutes());
-      setState({ places: pilot.places, slot, departureIsNow: true, status: "normal", screen: "search" });
+      setState({
+        places: pilot.places,
+        slot,
+        departureIsNow: true,
+        status: "normal",
+        screen: "search",
+        canopyLoaded: pilot.manifest.canopy === true,
+      });
       document.documentElement.dataset.places = String(pilot.places.length);
       const harness = import.meta.env.DEV || import.meta.env.VITE_CAPTURE === "1";
       if (harness) {

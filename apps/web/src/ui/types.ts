@@ -62,4 +62,5 @@ export interface UiState {
   readonly start: PlacePick | null;
   readonly end: PlacePick | null;
   readonly timePickerOpen: boolean;
+  readonly canopyLoaded: boolean;
 }

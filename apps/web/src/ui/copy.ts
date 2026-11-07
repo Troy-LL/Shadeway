@@ -1,7 +1,19 @@
 /** Exact UI strings from docs/design.md Copy section and screen specs. */
 
-export const ROUTE_ESTIMATE_LABEL =
+export const BUILDING_ONLY_ESTIMATE_LABEL = "Building-only estimate, no trees";
+
+export const CANOPY_ESTIMATE_LABEL =
   "Estimate from buildings and a satellite tree map, not field-checked";
+
+export const TREE_DATA_OUT_OF_DATE = "Tree data may be out of date (imagery about 2018–2020).";
+
+export function routeEstimateLabel(canopyLoaded: boolean): string {
+  return canopyLoaded ? CANOPY_ESTIMATE_LABEL : BUILDING_ONLY_ESTIMATE_LABEL;
+}
+
+export function sunMinutesFromSeconds(sunSeconds: number): number {
+  return Math.round(sunSeconds / 30) / 2;
+}
 
 export const COPY = {
   whereTo: "Where to?",
@@ -45,7 +57,9 @@ export function formatMinutes(totalMinutes: number): string {
 
 export function formatMinutesInSun(sunMinutes: number | null, shadeUnavailable = false): string {
   if (shadeUnavailable || sunMinutes === null) return COPY.shadeUnavailable;
-  return `${sunMinutes} min in sun`;
+  const rounded =
+    Number.isInteger(sunMinutes) ? String(sunMinutes) : sunMinutes.toFixed(1).replace(/\.0$/, "");
+  return `${rounded} min in sun`;
 }
 
 export function formatDistanceM(distanceM: number): string {

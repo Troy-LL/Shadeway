@@ -35,6 +35,7 @@ describe("attribution", () => {
     expect(text).toContain("ODbL");
     expect(text).toContain("CC BY 4.0");
     expect(text).toContain("Meta and WRI");
+    expect(text).toContain("Maxar");
   });
 });
 

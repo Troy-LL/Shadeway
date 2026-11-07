@@ -13,7 +13,7 @@ import {
 } from "@shadeway/contract";
 import { WALKING_SPEED_MPS } from "@shadeway/router";
 import { shadeModel } from "@shadeway/shade-model";
-import { COPY } from "./copy";
+import { COPY, sunMinutesFromSeconds } from "./copy";
 import type { RouteCardModel, ShadeSegment } from "./types";
 
 const CARD_ORDER: readonly RouteWeight[] = ["shadiest", "fastest"];
@@ -42,7 +42,7 @@ export function cardsFromResults(
     const card: RouteCardModel = {
       weight,
       totalMinutes: Math.round(result.durationS / 60),
-      sunMinutes: unavailable ? null : Math.round(result.sunSeconds / 60),
+      sunMinutes: unavailable ? null : sunMinutesFromSeconds(result.sunSeconds),
       segments: unavailable ? [] : segmentsForRoute(graph, tiles, result),
       confidence: options.canopy ? "Estimate + canopy" : "Estimate",
       geometry: result.geometry,

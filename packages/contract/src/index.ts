@@ -93,6 +93,7 @@ export const ATTRIBUTION = [
   "Overture Maps Foundation buildings, ODbL",
   "Google Open Buildings 2.5D Temporal, CC BY 4.0",
   "Meta and WRI 1 m canopy height, CC BY 4.0",
+  "Source imagery for CHM © 2016 Maxar",
 ] as const;
 
 /** Any height not from an OSM `height` tag is an estimate and is drawn with a dashed shadow edge. */

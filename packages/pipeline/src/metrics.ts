@@ -25,7 +25,7 @@ export function shadiestSunMinutes(input: {
   });
   const shadiest = routes.shadiest;
   if (!shadiest) return null;
-  return Math.round(shadiest.sunSeconds / 60);
+  return Math.round(shadiest.sunSeconds / 30) / 2;
 }
 
 export function tilesFromShadeFiles(files: Record<string, Uint8Array>): SunTile[] {
