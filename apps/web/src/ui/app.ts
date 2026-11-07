@@ -499,7 +499,8 @@ export function createUiApp(
       const slot = snapToNowSlot(manilaNowMinutes());
       setState({ places: pilot.places, slot, departureIsNow: true, status: "normal", screen: "search" });
       document.documentElement.dataset.places = String(pilot.places.length);
-      if (import.meta.env.DEV) {
+      const harness = import.meta.env.DEV || import.meta.env.VITE_CAPTURE === "1";
+      if (harness) {
         window.__shadeway = {
           places: pilot.places,
           pick(at) {

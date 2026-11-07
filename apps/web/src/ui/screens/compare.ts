@@ -180,12 +180,18 @@ function renderRouteCard(
   return card;
 }
 
-function cardTitle(route: RouteCardModel): string {
+export function compareCardTitle(route: RouteCardModel): string {
+  if (route.shadeUnavailable) {
+    return route.weight === "fastest" ? COPY.fastestWalk : COPY.shadiest;
+  }
   if (route.note === COPY.availableRoute) return COPY.availableRoute;
   if (route.note === COPY.shadiestAndFastest) return COPY.shadiestAndFastest;
   if (route.weight === "shadiest") return COPY.shadiest;
-  if (route.weight === "fastest" && route.shadeUnavailable) return COPY.fastestWalk;
   return COPY.fastest;
+}
+
+function cardTitle(route: RouteCardModel): string {
+  return compareCardTitle(route);
 }
 
 export function moveRouteSelection(state: UiState, direction: "next" | "prev"): RouteWeight | null {

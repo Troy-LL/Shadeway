@@ -1,10 +1,11 @@
-import { spawn } from "node:child_process";
-import { copyFile, mkdir, rm } from "node:fs/promises";
+import { execSync, spawn } from "node:child_process";
+import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const workspaceRoot = dirname(root);
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
@@ -27,17 +28,31 @@ const walks = [
 ];
 
 const shotWalk = walks[1];
-const port = 5173;
+const COPY_MARKER_SHADIEST_AND_FASTEST = "Shadiest and fastest";
+const port = Number(process.env.CAPTURE_PORT ?? 5193);
 const outputRoot = process.env.CAPTURE_OUT ? resolve(process.env.CAPTURE_OUT) : resolve(root, "screenshots");
 const artifactRoot = process.env.CAPTURE_ARTIFACTS ? resolve(process.env.CAPTURE_ARTIFACTS) : outputRoot;
 
-const server = spawn("pnpm", ["exec", "vite", "--port", String(port), "--host", "127.0.0.1", "--strictPort"], {
-  cwd: root,
+const buildSha = execSync("git rev-parse HEAD", { cwd: workspaceRoot, encoding: "utf8" }).trim();
+execSync("pnpm --filter @shadeway/web build", {
+  cwd: workspaceRoot,
   stdio: "inherit",
+  env: { ...process.env, VITE_CAPTURE: "1" },
 });
+await writeFile(resolve(root, "dist", "build-sha.txt"), `${buildSha}\n`, "utf8");
+
+const server = spawn(
+  "pnpm",
+  ["exec", "vite", "preview", "--port", String(port), "--host", "127.0.0.1", "--strictPort"],
+  {
+    cwd: root,
+    stdio: "inherit",
+  },
+);
 
 try {
   await waitFor(`http://127.0.0.1:${port}`);
+  await assertBuildSha(port, buildSha);
   const browser = await chromium.launch({
     args: ["--use-angle=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"],
   });
@@ -249,6 +264,14 @@ async function shootOutsideHours(browser, outputDir, artifactsDir) {
   await page.evaluate((from) => window.__shadeway.pick(from), shotWalk.from);
   await page.evaluate((to) => window.__shadeway.pick(to), shotWalk.to);
   await page.waitForSelector(".compare-screen", { timeout: 30_000 });
+  const meta = await page.locator(".route-card__meta").allTextContents();
+  if (meta.some((line) => line.includes(COPY_MARKER_SHADIEST_AND_FASTEST))) {
+    throw new Error(`outside-hours compare should not show merged title: ${meta.join("|")}`);
+  }
+  const fastestMeta = meta.find((line) => line.startsWith("Fastest"));
+  if (!fastestMeta?.includes("Fastest walk")) {
+    throw new Error(`outside-hours fastest label expected Fastest walk, got ${fastestMeta}`);
+  }
   const path = resolve(outputDir, "phone-compare-outside-hours.png");
   await page.screenshot({ path });
   await mirror(path, artifactsDir, "phone-compare-outside-hours.png");
@@ -265,10 +288,8 @@ async function exercise(browser) {
   if (!phoneSheet || phoneSheet.width < 370) throw new Error(`phone sheet width ${phoneSheet?.width}`);
   const resting = await page.locator(".suggest__option").count();
   if (resting < 2) throw new Error(`resting suggestions ${resting}`);
-  await page.locator(".suggest__option").first().click();
-  await page.locator(".search-field").nth(1).fill("market");
-  await page.waitForSelector(".suggest__option");
-  await page.locator(".suggest__option").first().click();
+  await page.evaluate((from) => window.__shadeway.pick(from), shotWalk.from);
+  await page.evaluate((to) => window.__shadeway.pick(to), shotWalk.to);
   await page.waitForSelector(".route-card__sun", { timeout: 30_000 });
   await setSlot(page, "12", "12:00");
   const metaLines = await page.locator(".route-card__meta").allTextContents();
@@ -310,6 +331,15 @@ async function mirror(from, artifactsDir, name) {
   const dest = resolve(artifactsDir, name);
   if (resolve(from) === dest) return;
   await copyFile(from, dest);
+}
+
+async function assertBuildSha(port, expected) {
+  const response = await fetch(`http://127.0.0.1:${port}/build-sha.txt`);
+  if (!response.ok) throw new Error(`build-sha.txt missing: ${response.status}`);
+  const served = (await response.text()).trim();
+  if (served !== expected) {
+    throw new Error(`stale preview build ${served} (expected ${expected})`);
+  }
 }
 
 async function waitFor(url) {

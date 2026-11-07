@@ -181,6 +181,24 @@ export const UI_STYLES = `
   .sheet-grabber {
     display: none;
   }
+
+  .shadeway-sheet[data-screen='compare'] .sheet-body,
+  .shadeway-sheet[data-screen='in-route'] .sheet-body {
+    flex: 0 1 auto;
+    overflow: visible;
+  }
+
+  .compare-screen,
+  .in-route-screen {
+    flex: 0 1 auto;
+    min-height: auto;
+  }
+
+  .compare-screen__scroll {
+    flex: 0 1 auto;
+    min-height: auto;
+    overflow: visible;
+  }
 }
 
 .sheet-body {
@@ -351,7 +369,7 @@ export const UI_STYLES = `
   box-sizing: border-box;
   border-radius: var(--radius-card);
   border: 2px solid var(--color-border);
-  padding: var(--space-2) var(--space-3);
+  padding: 6px var(--space-3) 7px;
   background: var(--color-surface);
   min-height: 88px;
   height: 88px;
@@ -361,7 +379,7 @@ export const UI_STYLES = `
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .route-card[aria-checked='true'] {
@@ -369,11 +387,12 @@ export const UI_STYLES = `
 }
 
 .route-card__sun {
-  font-size: var(--text-28);
+  font-size: 26px;
   font-weight: 600;
   color: var(--color-ink);
   margin: 0;
-  line-height: 1.05;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .route-card__sun--muted {
@@ -421,7 +440,7 @@ export const UI_STYLES = `
 .shade-strip {
   display: flex;
   width: 100%;
-  height: 8px;
+  height: 7px;
   border-radius: 6px;
   overflow: hidden;
   margin-top: auto;
@@ -476,12 +495,8 @@ export const UI_STYLES = `
   margin: 0;
   font-size: var(--text-15);
   color: var(--color-text-secondary);
-}
-
-@media (min-width: 900px) {
-  .in-route-screen__status {
-    white-space: nowrap;
-  }
+  line-height: 1.35;
+  max-width: 32ch;
 }
 
 .in-route-screen__sun {

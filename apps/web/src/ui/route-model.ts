@@ -63,7 +63,8 @@ function noteCards(cards: RouteCardModel[], same: boolean): RouteCardModel[] {
   if (cards.length === 1) {
     return cards.map((card) => ({ ...card, note: COPY.availableRoute }));
   }
-  if (same && cards.length >= 2) {
+  const shadeUnavailable = cards.some((card) => card.shadeUnavailable);
+  if (same && cards.length >= 2 && !shadeUnavailable) {
     const merged = cards.find((card) => card.weight === "shadiest") ?? cards[0];
     if (!merged) return cards;
     return [{ ...merged, note: COPY.shadiestAndFastest }];

@@ -11,7 +11,7 @@ describe("sheet map padding", () => {
           media: query,
           addEventListener: () => {},
           removeEventListener: () => {},
-        }) as MediaQueryList,
+        }) as unknown as MediaQueryList,
     );
     document.documentElement.style.setProperty("--safe-top", "47px");
     const { computeSheetPadding } = await import("./sheet-padding");

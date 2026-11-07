@@ -95,6 +95,22 @@ describe("route shade strip", () => {
     expect(cards.every((card) => card.shadeUnavailable)).toBe(true);
   });
 
+  it("does not merge identical walks when shade is unavailable", () => {
+    const tiles = REFERENCE_DAYS.map((day) => tile(day, [2], [0]));
+    const cards = cardsFromResults(
+      {
+        fastest: result("fastest", [2]),
+        balanced: result("balanced", [2]),
+        shadiest: result("shadiest", [2]),
+      },
+      graph,
+      tiles,
+      { shadeCoverageUnavailable: true },
+    );
+    expect(cards.length).toBe(2);
+    expect(cards.some((card) => card.note === COPY.shadiestAndFastest)).toBe(false);
+  });
+
   it("says so when the shadiest walk is the fastest walk", () => {
     const tiles = REFERENCE_DAYS.map((day) => tile(day, [2], [0]));
     const same = cardsFromResults(
