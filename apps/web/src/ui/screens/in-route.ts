@@ -18,7 +18,7 @@ export function renderInRouteContent(state: UiState, handlers: InRouteHandlers):
 
   const sun = document.createElement("p");
   sun.className = "in-route-screen__sun";
-  sun.textContent = formatMinutesInSun(state.tripSunMinutes);
+  sun.textContent = formatMinutesInSun(state.tripSunMinutes, state.tripSunMinutes === null);
 
   const totals = document.createElement("p");
   totals.className = "in-route-screen__totals";

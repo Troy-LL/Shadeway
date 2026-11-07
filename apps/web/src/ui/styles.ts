@@ -102,8 +102,8 @@ export const UI_STYLES = `
 }
 
 .shadeway-sheet[data-screen='search'][data-editing='true'] {
-  height: calc(100dvh - var(--safe-top) - 48px);
-  max-height: calc(100dvh - var(--safe-top) - 48px);
+  height: var(--sheet-edit-height, calc(100dvh - var(--safe-top) - 48px));
+  max-height: var(--sheet-edit-height, calc(100dvh - var(--safe-top) - 48px));
 }
 
 .shadeway-sheet[data-screen='compare'] {
@@ -113,6 +113,23 @@ export const UI_STYLES = `
 .shadeway-sheet[data-screen='in-route'] {
   height: calc(268px + var(--safe-bottom));
   max-height: calc(268px + var(--safe-bottom));
+}
+
+.sheet-grabber {
+  min-height: var(--touch-min);
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  cursor: grab;
+}
+
+.sheet-grabber__pill {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-text-secondary);
 }
 
 @media (min-width: 900px) {
@@ -134,26 +151,14 @@ export const UI_STYLES = `
     max-height: calc(100dvh - 32px);
   }
 
+  .shadeway-sheet[data-screen='search'][data-editing='true'] {
+    height: auto;
+    max-height: calc(100dvh - 32px);
+  }
+
   .sheet-grabber {
     display: none;
   }
-}
-
-.sheet-grabber {
-  min-height: var(--touch-min);
-  display: grid;
-  place-items: center;
-  border: 0;
-  background: transparent;
-  width: 100%;
-  cursor: grab;
-}
-
-.sheet-grabber__pill {
-  width: 36px;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--color-text-secondary);
 }
 
 .sheet-body {
@@ -176,9 +181,21 @@ export const UI_STYLES = `
   gap: var(--space-3);
 }
 
-.search-screen,
-.compare-screen .route-cards {
+.compare-screen__scroll,
+.search-screen {
   overflow: auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.compare-screen__footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
 .search-fields {
@@ -223,6 +240,7 @@ export const UI_STYLES = `
 .suggest {
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
 }
 
 .suggest__option {
@@ -275,7 +293,7 @@ export const UI_STYLES = `
 .departure-picker__list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
   max-height: 220px;
   overflow: auto;
 }

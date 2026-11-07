@@ -22,12 +22,14 @@ export function cardsFromResults(
   routes: Readonly<Record<RouteWeight, RouteResult | null>>,
   graph: GraphFile,
   tiles: readonly SunTile[],
+  options: { readonly shadeCoverageUnavailable?: boolean } = {},
 ): RouteCardModel[] {
   const fastest = routes.fastest;
   const shadiest = routes.shadiest;
   const sunDown =
     fastest?.geometry[0] !== undefined &&
     shadeModel.sunPosition(fastest.departure, fastest.geometry[0]).elevationDeg <= 0;
+  const unavailable = sunDown || options.shadeCoverageUnavailable === true;
   const same =
     fastest !== null &&
     shadiest !== null &&
@@ -40,13 +42,13 @@ export function cardsFromResults(
     const card: RouteCardModel = {
       weight,
       totalMinutes: Math.round(result.durationS / 60),
-      sunMinutes: sunDown ? 0 : Math.round(result.sunSeconds / 60),
-      segments: segmentsForRoute(graph, tiles, result),
+      sunMinutes: unavailable ? null : Math.round(result.sunSeconds / 60),
+      segments: unavailable ? [] : segmentsForRoute(graph, tiles, result),
       confidence: "Estimate",
       geometry: result.geometry,
       distanceM: result.distanceM,
       edgeKey: result.edgeIds.join(","),
-      shadeUnavailable: sunDown && weight === "fastest",
+      shadeUnavailable: unavailable,
     };
     cards.push(card);
   }
@@ -62,7 +64,9 @@ function noteCards(cards: RouteCardModel[], same: boolean): RouteCardModel[] {
     return cards.map((card) => ({ ...card, note: COPY.availableRoute }));
   }
   if (same && cards.length >= 2) {
-    return cards.map((card) => (card.weight === "shadiest" ? { ...card, note: COPY.shadiestAndFastest } : card));
+    const merged = cards.find((card) => card.weight === "shadiest") ?? cards[0];
+    if (!merged) return cards;
+    return [{ ...merged, note: COPY.shadiestAndFastest }];
   }
   return cards;
 }

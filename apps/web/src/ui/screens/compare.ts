@@ -86,8 +86,11 @@ export function renderCompareContent(state: UiState, handlers: CompareHandlers):
 
   if (status) container.append(status);
 
+  const scroll = document.createElement("div");
+  scroll.className = "compare-screen__scroll";
+
   if (state.timePickerOpen) {
-    container.append(
+    scroll.append(
       renderDeparturePicker({
         slot: state.slot,
         departureIsNow: state.departureIsNow,
@@ -110,12 +113,15 @@ export function renderCompareContent(state: UiState, handlers: CompareHandlers):
     group.append(renderRouteCard(route, route.weight === state.selectedWeight, handlers.onSelectWeight));
   }
 
-  container.append(group);
+  scroll.append(group);
+  container.append(scroll);
 
+  const footer = document.createElement("div");
+  footer.className = "compare-screen__footer";
   const estimate = document.createElement("p");
   estimate.className = "sheet-estimate-label";
   estimate.textContent = ROUTE_ESTIMATE_LABEL;
-  container.append(estimate);
+  footer.append(estimate);
 
   if (state.status === "normal" || state.status === "shade-unavailable") {
     const start = document.createElement("button");
@@ -123,8 +129,9 @@ export function renderCompareContent(state: UiState, handlers: CompareHandlers):
     start.className = "primary-action";
     start.textContent = COPY.start;
     start.addEventListener("click", handlers.onStart);
-    container.append(start);
+    footer.append(start);
   }
+  container.append(footer);
 
   return container;
 }
@@ -159,7 +166,7 @@ function renderRouteCard(
     sun.textContent = COPY.shadeUnavailable;
     sun.classList.add("route-card__sun--muted");
   } else {
-    sun.textContent = formatMinutesInSun(route.sunMinutes);
+    sun.textContent = formatMinutesInSun(route.sunMinutes, route.sunMinutes === null);
   }
 
   const strip = route.shadeUnavailable ? null : renderShadeStrip(route.segments);

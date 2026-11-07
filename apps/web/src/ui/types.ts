@@ -30,7 +30,7 @@ export interface PlacePick {
 export interface RouteCardModel {
   readonly weight: RouteWeight;
   readonly totalMinutes: number;
-  readonly sunMinutes: number;
+  readonly sunMinutes: number | null;
   readonly segments: readonly ShadeSegment[];
   readonly confidence: ConfidenceBadge;
   readonly geometry: readonly LngLat[];
@@ -51,7 +51,7 @@ export interface UiState {
   readonly routes: readonly RouteCardModel[];
   readonly locationDenied: boolean;
   readonly tripMinutes: number;
-  readonly tripSunMinutes: number;
+  readonly tripSunMinutes: number | null;
   readonly tripDistanceM: number;
   readonly fromQuery: string;
   readonly toQuery: string;

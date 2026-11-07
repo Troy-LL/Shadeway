@@ -10,7 +10,7 @@ import {
   shadowDraws,
   type RouteDraw,
 } from "./scene";
-import { createMapLibreView, type CameraMove, type MapView } from "./view";
+import { createMapLibreView, type CameraMove, type MapLayerDiagnostics, type MapView } from "./view";
 import { COPY } from "../ui/copy";
 
 export interface RouteGeometry {
@@ -33,8 +33,10 @@ export interface MapController {
   setStartMarker(position: LngLat | null, label?: string): void;
   setEndMarker(position: LngLat | null, label?: string): void;
   setPilotBox(visible: boolean): void;
+  setRouteMidpointLabels(labels: readonly { readonly text: string; readonly at: LngLat }[]): void;
   whenReady(): Promise<PilotData | null>;
   subscribeMapTap(listener: (position: LngLat) => void): () => void;
+  mapDiagnostics(): MapLayerDiagnostics | null;
 }
 
 export interface MapControllerOptions {
@@ -148,8 +150,10 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
     setPilotBox(visible) {
       if (!visible || !pilot) {
         view.setOutline(null);
+        view.setPilotVeil(null);
         return;
       }
+      view.setPilotVeil(pilot.manifest.bbox);
       const [west, south, east, north] = pilot.manifest.bbox;
       view.setOutline([
         [west, south],
@@ -165,6 +169,12 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
     subscribeMapTap(listener) {
       taps.add(listener);
       return () => taps.delete(listener);
+    },
+    mapDiagnostics() {
+      return view.mapDiagnostics();
+    },
+    setRouteMidpointLabels(labels) {
+      view.setRouteMidpointLabels(labels);
     },
   };
 
@@ -243,11 +253,15 @@ export function createNoopMapController(): MapController {
     setStartMarker() {},
     setEndMarker() {},
     setPilotBox() {},
+    setRouteMidpointLabels() {},
     whenReady() {
       return Promise.resolve(null);
     },
     subscribeMapTap() {
       return () => {};
+    },
+    mapDiagnostics() {
+      return null;
     },
   };
 }
@@ -308,11 +322,11 @@ function motionMs(): number {
 
 function sheetPadding(): { top: number; right: number; bottom: number; left: number } {
   const sheet = document.querySelector(".shadeway-sheet");
-  if (!(sheet instanceof HTMLElement)) return { top: 72, right: 28, bottom: 120, left: 28 };
-  const rect = sheet.getBoundingClientRect();
-  const floating = rect.width < window.innerWidth - 48;
-  if (floating) return { top: 72, right: 32, bottom: 24, left: 416 };
-  return { top: 72, right: 28, bottom: Math.round(rect.height + 24), left: 28 };
+  const wide = window.matchMedia("(min-width: 900px)").matches;
+  if (wide) return { top: 32, right: 32, bottom: 32, left: 416 };
+  const rect = sheet instanceof HTMLElement ? sheet.getBoundingClientRect() : null;
+  const sheetHeight = rect ? Math.round(rect.height) : 164;
+  return { top: 64, right: 16, bottom: sheetHeight + 16, left: 16 };
 }
 
 function renderAttribution(host: HTMLElement, lines: readonly string[]): void {
@@ -476,6 +490,22 @@ const MAP_CSS = `
   border: 3px solid #14202b;
   background: #ffffff;
   box-shadow: 0 0 0 2px #ffffff, 0 1px 3px rgba(20, 32, 43, 0.35);
+}
+.shadeway-route-tag {
+  font: 600 11px/1.2 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: #14202b;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 1px 2px rgba(20, 32, 43, 0.2);
+}
+@media (prefers-color-scheme: dark) {
+  .shadeway-route-tag {
+    color: #f5f7fa;
+    background: rgba(28, 32, 38, 0.92);
+  }
 }
 .shadeway-marker--end {
   width: 18px;

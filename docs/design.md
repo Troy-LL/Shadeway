@@ -20,7 +20,7 @@ Flat 2D Shadeway UI per ENG-021. Mobile-first at 390x844, desktop side panel at 
 
 - From and To fields with a 44px Swap control. To placeholder "Where to?".
 - Typing filters pilot places (up to three suggestions). Map tap fills the focused field. Both endpoints set opens Compare.
-- Location denied: From disabled, "Location off" placeholder.
+- Location denied: From stays editable with a "Location off" placeholder; no live GPS fill.
 
 ## Compare
 

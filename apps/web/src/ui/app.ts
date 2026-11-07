@@ -3,6 +3,7 @@ import { shadeModel } from "@shadeway/shade-model";
 import { MAP_SUN_DATE, type MapController } from "../map/controller";
 import type { PilotData } from "../map/pilot";
 import { attachSheetKeyboard } from "./bottom-sheet";
+import { bindVisualViewport } from "./viewport-sheet";
 import { COPY } from "./copy";
 import { createNoopMapController } from "./controller-stub";
 import { createRouteClient, nearestNode, type RouteClient } from "./route-client";
@@ -11,10 +12,15 @@ import { cardsFromResults } from "./route-model";
 import { effectiveRouteWeight } from "./route-selection";
 import { moveRouteSelection, renderCompareContent } from "./screens/compare";
 import { renderInRouteContent } from "./screens/in-route";
-import { renderSearchContent } from "./screens/search";
+import { createSearchScreen, updateSearchScreen, type SearchScreenMount } from "./screens/search";
 import { segmentsForSlot } from "./slot-segments";
 import type { PlacePick, RouteCardModel, UiState } from "./types";
 import { UI_STYLES } from "./styles";
+
+function routeMidpoint(line: readonly LngLat[]): LngLat | null {
+  if (line.length === 0) return null;
+  return line[Math.floor(line.length / 2)] ?? null;
+}
 
 function applySegmentsForSlot(routes: readonly RouteCardModel[], slot: UiState["slot"]): readonly RouteCardModel[] {
   const segments = segmentsForSlot(slot);
@@ -33,7 +39,7 @@ function emptyUiState(): UiState {
     routes: [],
     locationDenied: false,
     tripMinutes: 0,
-    tripSunMinutes: 0,
+    tripSunMinutes: null,
     tripDistanceM: 0,
     fromQuery: "",
     toQuery: "",
@@ -60,6 +66,7 @@ export function createUiApp(
   let routeClient: RouteClient | null = null;
   let routeGeneration = 0;
   let framed = "";
+  let searchMount: SearchScreenMount | null = null;
 
   const shell = document.createElement("div");
   shell.className = "shadeway-ui";
@@ -109,6 +116,21 @@ export function createUiApp(
       map.setAlternateRoute(null);
     }
     map.followPosition(false);
+    if (state.screen === "compare" && state.start && state.end) {
+      const labels: { text: string; at: LngLat }[] = [];
+      const tag = `${state.start.name} → ${state.end.name}`;
+      if (selected?.geometry.length) {
+        const at = routeMidpoint(selected.geometry);
+        if (at) labels.push({ text: tag, at });
+      }
+      if (alternate?.geometry.length) {
+        const at = routeMidpoint(alternate.geometry);
+        if (at) labels.push({ text: tag, at });
+      }
+      map.setRouteMidpointLabels(labels);
+    } else {
+      map.setRouteMidpointLabels([]);
+    }
     if (state.start || state.end) {
       map.setStartMarker(state.start?.at ?? null, state.start?.name);
       map.setEndMarker(state.end?.at ?? null, state.end?.name);
@@ -120,9 +142,10 @@ export function createUiApp(
     sheet.dataset.screen = state.screen;
     sheet.dataset.editing = state.editingField ? "true" : "false";
     grabber.setAttribute("aria-label", state.detent === "peek" ? COPY.expandSheet : COPY.collapseSheet);
-    body.replaceChildren();
 
     if (state.screen === "in-route") {
+      searchMount = null;
+      body.replaceChildren();
       body.append(
         renderInRouteContent(state, {
           onEnd: endToCompare,
@@ -133,6 +156,8 @@ export function createUiApp(
     }
 
     if (state.screen === "compare") {
+      searchMount = null;
+      body.replaceChildren();
       body.append(
         renderCompareContent(state, {
           onSelectWeight: (weight) => {
@@ -172,14 +197,15 @@ export function createUiApp(
               screen: "in-route",
               detent: "half",
               tripMinutes: selected?.totalMinutes ?? 0,
-              tripSunMinutes: selected?.sunMinutes ?? 0,
+              tripSunMinutes: selected?.sunMinutes ?? null,
               tripDistanceM: selected?.distanceM ?? 0,
               timePickerOpen: false,
             });
           },
           onTryAgain: () => {
-            if (live && state.status === "tile-failed") {
-              window.location.reload();
+            if (live && state.start && state.end) {
+              setState({ status: "loading-tiles" });
+              void routeBetween(state.start, state.end);
               return;
             }
             setState({ status: "normal" });
@@ -198,27 +224,49 @@ export function createUiApp(
       return;
     }
 
-    body.append(
-      renderSearchContent(state, {
-        onFocusField: (field) => setState({ focusedField: field, editingField: true, detent: "half" }),
-        onFromQuery: (query) => setState({ fromQuery: query, query, focusedField: "from", editingField: true }),
-        onToQuery: (query) => setState({ toQuery: query, query, focusedField: "to", editingField: true }),
-        onSwap: () => {
-          if (!state.start && !state.end) return;
-          map.setStartMarker(state.end?.at ?? null, state.end?.name);
-          map.setEndMarker(state.start?.at ?? null, state.start?.name);
-          setState({
-            start: state.end,
-            end: state.start,
-            fromQuery: state.end?.name ?? "",
-            toQuery: state.start?.name ?? "",
-          });
-        },
-        onPick: (place) => {
-          if (live) pickPlace(place);
-        },
-      }),
-    );
+    const searchHandlers = {
+      onFocusField: (field: "from" | "to") => setState({ focusedField: field, editingField: true, detent: "half" }),
+      onFromQuery: (query: string) => {
+        const pinned = state.start?.name.trim() ?? "";
+        setState({
+          fromQuery: query,
+          query,
+          focusedField: "from",
+          editingField: true,
+          start: pinned && query.trim() === pinned ? state.start : null,
+        });
+      },
+      onToQuery: (query: string) => {
+        const pinned = state.end?.name.trim() ?? "";
+        setState({
+          toQuery: query,
+          query,
+          focusedField: "to",
+          editingField: true,
+          end: pinned && query.trim() === pinned ? state.end : null,
+        });
+      },
+      onSwap: () => {
+        if (!state.start && !state.end) return;
+        map.setStartMarker(state.end?.at ?? null, state.end?.name);
+        map.setEndMarker(state.start?.at ?? null, state.start?.name);
+        setState({
+          start: state.end,
+          end: state.start,
+          fromQuery: state.end?.name ?? "",
+          toQuery: state.start?.name ?? "",
+        });
+      },
+      onPick: (place: PlacePick) => {
+        if (live) pickPlace(place);
+      },
+    };
+    if (!searchMount || !body.contains(searchMount.root)) {
+      searchMount = createSearchScreen(searchHandlers);
+      body.replaceChildren();
+      body.append(searchMount.root);
+    }
+    updateSearchScreen(searchMount, state, searchHandlers);
   };
 
   const setState = (patch: Partial<UiState>) => {
@@ -257,7 +305,22 @@ export function createUiApp(
     }
     map.setPilotBox(false);
     const field = state.focusedField;
-    if (field === "from" || !state.start) {
+    if (field === "from") {
+      map.setStartMarker(place.at, place.name);
+      setState({
+        start: place,
+        fromQuery: place.name,
+        editingField: true,
+        focusedField: state.end ? "to" : "to",
+        toQuery: state.end?.name ?? "",
+        status: "normal",
+        screen: state.end ? "compare" : "search",
+        detent: "half",
+      });
+      if (state.end) void routeBetween(place, state.end);
+      return;
+    }
+    if (!state.start) {
       map.setStartMarker(place.at, place.name);
       setState({
         start: place,
@@ -300,17 +363,17 @@ export function createUiApp(
         departure,
       );
       if (generation !== routeGeneration) return;
-      const cards = cardsFromResults(routed, pilot.graph, pilot.tiles);
+      const sun = shadeModel.sunPosition(departure, origin);
+      const sunDown = sun.elevationDeg <= 0;
+      const outsideHours = state.departureIsNow && !shadeDepartureAvailable(manilaNowMinutes());
+      const shadeUnavailable = sunDown || outsideHours;
+      const cards = cardsFromResults(routed, pilot.graph, pilot.tiles, { shadeCoverageUnavailable: shadeUnavailable });
       if (cards.length === 0) {
         map.setStartMarker(null);
         map.setEndMarker(null);
         setState({ status: "no-route", routes: [], screen: "search", detent: "half", start: null, end: null });
         return;
       }
-      const sun = shadeModel.sunPosition(departure, origin);
-      const sunDown = sun.elevationDeg <= 0;
-      const outsideHours = state.departureIsNow && !shadeDepartureAvailable(manilaNowMinutes());
-      const shadeUnavailable = sunDown || outsideHours;
       const selectedWeight = effectiveRouteWeight(state.preferredWeight, shadeUnavailable);
       const picked = cards.find((card) => card.weight === selectedWeight) ?? cards[0];
       if (!picked) return;
@@ -357,6 +420,14 @@ export function createUiApp(
     setState({ detent: next, editingField: next === "half" && state.screen === "search" });
   });
 
+  bindVisualViewport((heightPx) => {
+    if (heightPx > 0) {
+      document.documentElement.style.setProperty("--sheet-edit-height", `${Math.round(heightPx)}px`);
+    } else {
+      document.documentElement.style.removeProperty("--sheet-edit-height");
+    }
+  });
+
   render();
   syncMap();
   shell.dataset.locationDenied = state.locationDenied ? "true" : "false";
@@ -390,6 +461,9 @@ export function createUiApp(
               date: MAP_SUN_DATE,
               minutes,
             });
+          },
+          mapDiagnostics() {
+            return map.mapDiagnostics();
           },
         };
       }

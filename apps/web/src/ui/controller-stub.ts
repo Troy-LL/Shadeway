@@ -13,11 +13,15 @@ export function createNoopMapController(): MapController {
     setStartMarker() {},
     setEndMarker() {},
     setPilotBox() {},
+    setRouteMidpointLabels() {},
     whenReady() {
       return Promise.resolve(null);
     },
     subscribeMapTap() {
       return () => {};
+    },
+    mapDiagnostics() {
+      return null;
     },
   };
 }

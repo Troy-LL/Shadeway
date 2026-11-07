@@ -41,7 +41,8 @@ export function formatMinutes(totalMinutes: number): string {
   return `${totalMinutes} min`;
 }
 
-export function formatMinutesInSun(sunMinutes: number): string {
+export function formatMinutesInSun(sunMinutes: number | null, shadeUnavailable = false): string {
+  if (shadeUnavailable || sunMinutes === null) return COPY.shadeUnavailable;
   return `${sunMinutes} min in sun`;
 }
 

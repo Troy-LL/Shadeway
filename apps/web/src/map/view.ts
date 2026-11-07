@@ -6,12 +6,12 @@ import "maplibre-gl/dist/maplibre-gl.css";
 setWorkerUrl(maplibreWorkerUrl);
 import type { RouteDraw, ShadowDraw } from "./scene";
 
-const SHADOW = [20, 32, 43, 46] as const;
-const SHADOW_DARK = [0, 0, 0, 77] as const;
-const EDGE = [20, 32, 43, 89] as const;
-const EDGE_DARK = [255, 255, 255, 64] as const;
-const EDGE_EST = [20, 32, 43, 89] as const;
-const EDGE_EST_DARK = [255, 255, 255, 64] as const;
+const SHADOW = [20, 32, 43, 255] as const;
+const SHADOW_DARK = [0, 0, 0, 255] as const;
+const EDGE = [20, 32, 43, 255] as const;
+const EDGE_DARK = [255, 255, 255, 255] as const;
+const EDGE_EST = [20, 32, 43, 255] as const;
+const EDGE_EST_DARK = [255, 255, 255, 255] as const;
 const SUN_LINE = [245, 165, 36, 255] as const;
 const SUN_LINE_DARK = [255, 184, 77, 255] as const;
 const SHADE_LINE = [31, 122, 140, 255] as const;
@@ -40,6 +40,13 @@ export interface MapScene {
   readonly showShadowFill: boolean;
 }
 
+export interface MapLayerDiagnostics {
+  readonly pitch: number;
+  readonly bearing: number;
+  readonly layerVisibility: Readonly<Record<string, string>>;
+  readonly symbolLayerIds: readonly string[];
+}
+
 export interface MapView {
   setRoads(roads: readonly (readonly LngLat[])[]): void;
   setLand(areas: readonly { kind: "park" | "water"; ring: readonly LngLat[] }[]): void;
@@ -57,7 +64,18 @@ export interface MapView {
     labels?: { readonly startLabel?: string; readonly endLabel?: string },
   ): void;
   setOutline(ring: readonly LngLat[] | null): void;
+  setPilotVeil(bbox: readonly [number, number, number, number] | null): void;
+  setRouteMidpointLabels(labels: readonly { readonly text: string; readonly at: LngLat }[]): void;
   onTap(listener: (position: LngLat) => void): void;
+  mapDiagnostics(): MapLayerDiagnostics | null;
+}
+
+export function shadowLayerVisibility(showShadowFill: boolean): Readonly<Record<string, "visible" | "none">> {
+  return {
+    shadows: showShadowFill ? "visible" : "none",
+    "shadow-edge": "none",
+    "shadow-edge-estimated": showShadowFill ? "visible" : "none",
+  };
 }
 
 const SCENE_SOURCES = [
@@ -105,9 +123,17 @@ export function createMapLibreView(root: HTMLElement): MapView {
     map.addSource("water", { type: "geojson", data: emptyCollection() });
     map.addSource("roads", { type: "geojson", data: emptyCollection() });
     map.addSource("outline", { type: "geojson", data: emptyCollection() });
+    map.addSource("pilot-veil", { type: "geojson", data: emptyCollection() });
     for (const id of SCENE_SOURCES) {
       map.addSource(id, { type: "geojson", data: emptyCollection() });
     }
+    map.addLayer({
+      id: "pilot-veil",
+      type: "fill",
+      source: "pilot-veil",
+      paint: { "fill-color": "#F3EFE8", "fill-opacity": 0.6 },
+      layout: { visibility: "none" },
+    });
     map.addLayer({
       id: "parks",
       type: "fill",
@@ -221,6 +247,7 @@ export function createMapLibreView(root: HTMLElement): MapView {
 
   let startMarker: Marker | null = null;
   let endMarker: Marker | null = null;
+  let midpointMarkers: Marker[] = [];
   let lastScene: MapScene | null = null;
   const theme = window.matchMedia("(prefers-color-scheme: dark)");
   const repaint = () => {
@@ -283,6 +310,31 @@ export function createMapLibreView(root: HTMLElement): MapView {
       startMarker = placeMarker(map, startMarker, start, "start", labels?.startLabel);
       endMarker = placeMarker(map, endMarker, end, "end", labels?.endLabel);
     },
+    setPilotVeil(bbox) {
+      const data =
+        bbox === null
+          ? emptyCollection()
+          : ringsCollection(veilOutsideBbox(bbox));
+      whenLoaded(() => {
+        const source = map.getSource("pilot-veil");
+        if (isGeoJsonSource(source)) source.setData(data);
+        if (map.getLayer("pilot-veil")) {
+          map.setLayoutProperty("pilot-veil", "visibility", bbox === null ? "none" : "visible");
+        }
+        paintPilotVeil();
+      });
+    },
+    setRouteMidpointLabels(labels) {
+      whenLoaded(() => {
+        for (const marker of midpointMarkers) marker.remove();
+        midpointMarkers = labels.map((label) => {
+          const element = document.createElement("div");
+          element.className = "shadeway-route-tag";
+          element.textContent = label.text;
+          return new Marker({ element, anchor: "center" }).setLngLat([label.at[0], label.at[1]]).addTo(map);
+        });
+      });
+    },
     setOutline(ring) {
       const data =
         ring && ring.length >= 2
@@ -305,8 +357,66 @@ export function createMapLibreView(root: HTMLElement): MapView {
     onTap(listener) {
       map.on("click", (event) => listener([event.lngLat.lng, event.lngLat.lat]));
     },
+    mapDiagnostics() {
+      return readMapDiagnostics(map);
+    },
   };
   return view;
+}
+
+const SHADOW_LAYERS = ["shadows", "shadow-edge", "shadow-edge-estimated"] as const;
+
+function veilOutsideBbox(bbox: readonly [number, number, number, number]): (readonly LngLat[])[] {
+  const [w, s, e, n] = bbox;
+  const west = w - 0.15;
+  const east = e + 0.15;
+  const south = s - 0.15;
+  const north = n + 0.15;
+  const ring = (coords: LngLat[]) => [...coords, coords[0]!];
+  return [
+    ring([
+      [west, north],
+      [east, north],
+      [east, 90],
+      [west, 90],
+    ]),
+    ring([
+      [west, -90],
+      [east, -90],
+      [east, south],
+      [west, south],
+    ]),
+    ring([
+      [west, south],
+      [w, south],
+      [w, north],
+      [west, north],
+    ]),
+    ring([
+      [e, south],
+      [east, south],
+      [east, north],
+      [e, north],
+    ]),
+  ];
+}
+
+function readMapDiagnostics(map: Map): MapLayerDiagnostics | null {
+  const style = map.getStyle();
+  if (!style) return null;
+  const layerVisibility: Record<string, string> = {};
+  for (const id of SHADOW_LAYERS) {
+    if (!map.getLayer(id)) continue;
+    const visibility = map.getLayoutProperty(id, "visibility");
+    layerVisibility[id] = visibility === "none" ? "none" : "visible";
+  }
+  const symbolLayerIds = style.layers.filter((layer) => layer.type === "symbol").map((layer) => layer.id);
+  return {
+    pitch: map.getPitch(),
+    bearing: map.getBearing(),
+    layerVisibility,
+    symbolLayerIds,
+  };
 }
 
 function applyScene(scene: MapScene): void {
@@ -326,14 +436,9 @@ function applyScene(scene: MapScene): void {
   setSourceData(map, "route-shade-casing", linesCollection(scene.route.shaded));
   setSourceData(map, "route-shade", linesCollection(scene.route.shaded));
   setSourceData(map, "route-ticks", linesCollection(scene.route.ticks));
-  const shadowOn = scene.showShadowFill;
-  for (const id of ["shadows", "shadow-edge", "shadow-edge-estimated"] as const) {
-    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
-  }
-  if (shadowOn) {
-    if (map.getLayer("shadows")) map.setLayoutProperty("shadows", "visibility", "visible");
-    if (map.getLayer("shadow-edge")) map.setLayoutProperty("shadow-edge", "visibility", "none");
-    if (map.getLayer("shadow-edge-estimated")) map.setLayoutProperty("shadow-edge-estimated", "visibility", "visible");
+  const visibility = shadowLayerVisibility(scene.showShadowFill);
+  for (const [id, state] of Object.entries(visibility)) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", state);
   }
 }
 
@@ -364,10 +469,18 @@ function palette() {
   };
 }
 
+function paintPilotVeil(): void {
+  const map = baseMap;
+  if (!map?.getLayer("pilot-veil")) return;
+  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  map.setPaintProperty("pilot-veil", "fill-color", dark ? "#14181d" : "#f3efe8");
+}
+
 function paintBase(): void {
   const colors = palette();
   const map = baseMap;
   if (!map) return;
+  paintPilotVeil();
   if (map.getLayer("land")) map.setPaintProperty("land", "background-color", colors.land);
   if (map.getLayer("parks")) map.setPaintProperty("parks", "fill-color", colors.park);
   if (map.getLayer("water")) map.setPaintProperty("water", "fill-color", colors.water);
@@ -385,7 +498,13 @@ function paintSceneColors(): void {
     map.setPaintProperty("shadows", "fill-opacity", colors.dark ? 0.3 : 0.18);
   }
   if (map.getLayer("shadow-edge")) map.setPaintProperty("shadow-edge", "line-color", rgba(colors.edge));
-  if (map.getLayer("shadow-edge-estimated")) map.setPaintProperty("shadow-edge-estimated", "line-color", rgba(colors.edgeEst));
+  if (map.getLayer("shadow-edge-estimated")) {
+    map.setPaintProperty("shadow-edge-estimated", "line-color", colors.dark ? "#ffffff" : "#14202b");
+    map.setPaintProperty("shadow-edge-estimated", "line-opacity", colors.dark ? 0.25 : 0.35);
+  }
+  if (map.getLayer("shadow-edge")) {
+    map.setPaintProperty("shadow-edge", "line-opacity", 0);
+  }
   if (map.getLayer("route-inactive-casing")) {
     map.setPaintProperty("route-inactive-casing", "line-color", rgba(INACTIVE_CASING_DARK));
     map.setLayoutProperty("route-inactive-casing", "visibility", colors.dark ? "visible" : "none");

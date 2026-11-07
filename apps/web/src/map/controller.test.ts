@@ -72,8 +72,13 @@ function fakeView(): MapView & {
       view.markers = { start, end };
     },
     setOutline() {},
+    setPilotVeil() {},
+    setRouteMidpointLabels() {},
     onTap(listener: (position: LngLat) => void) {
       view.tap = listener;
+    },
+    mapDiagnostics() {
+      return null;
     },
   };
   return view;

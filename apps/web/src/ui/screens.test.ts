@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { COPY, ROUTE_ESTIMATE_LABEL } from "./copy";
 import { defaultUiState } from "./fixtures";
 import { renderUiState, renderUiStateById } from "./render";
+import { suggestionPlaces } from "./screens/search";
 import { UI_STATE_IDS } from "./state-fixtures";
 
 describe("UI screen states", () => {
@@ -68,6 +69,36 @@ describe("Search", () => {
     document.body.append(root);
     expect(root.querySelectorAll(".search-field").length).toBe(2);
     expect(root.querySelector(".search-swap")).toBeTruthy();
+    document.body.replaceChildren();
+  });
+
+  it("shows resting suggestions while editing with an empty query", () => {
+    const places = [
+      { name: "Market! Market!", at: [121.056, 14.549] as const },
+      { name: "Bonifacio High Street", at: [121.05, 14.551] as const },
+    ];
+    const suggestions = suggestionPlaces(
+      defaultUiState({ editingField: true, focusedField: "to", places, toQuery: "" }),
+      "",
+    );
+    expect(suggestions.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("keeps a coordinate pick label instead of the no-match copy", () => {
+    const coord = "14.55148, 121.04862";
+    const root = renderUiState(
+      defaultUiState({
+        screen: "search",
+        detent: "half",
+        editingField: true,
+        focusedField: "from",
+        fromQuery: coord,
+        start: { name: coord, at: [121.04862, 14.55148] },
+      }),
+    );
+    document.body.append(root);
+    const msg = root.querySelector(".status-message--secondary");
+    expect(msg === null || (msg as HTMLElement).hidden).toBe(true);
     document.body.replaceChildren();
   });
 
