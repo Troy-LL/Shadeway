@@ -1,6 +1,6 @@
 # Shadeway
 
-A walking router that spends less of your walk in the sun. It picks the route with the least time in direct sun, using shadows from buildings and, later, tree canopy. The map feels like Apple Maps: 3D first, with a 2D view that draws the shadows along the route you chose.
+A walking router that spends less of your walk in the sun. It picks the route with the least time in direct sun, using shadows from buildings and, later, tree canopy. The map is a flat 2D view that draws the shadows along the route you chose.
 
 Pilot area: Bonifacio Global City (BGC), Taguig, Metro Manila. A walkable grid of towers, covered walkways, and tree-lined streets.
 

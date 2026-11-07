@@ -2,7 +2,7 @@
 
 Proposals, not yet checked against renders. A build that departs from this file updates it in place.
 
-Feel: Apple Maps. The map is the screen. Text is minimal and navigation is obvious. 3D is the default, 2D is one tap away and shows the shadows along the route.
+Feel: Apple Maps. The map is the screen. Text is minimal and navigation is obvious. The map is always flat 2D and shows the shadows along the route.
 
 ## Principles
 
@@ -16,7 +16,7 @@ Feel: Apple Maps. The map is the screen. Text is minimal and navigation is obvio
 ## Layout
 
 - Bottom sheet with three detents: peek, half, full. Drag, tap the grabber, or press Up and Down when it has focus.
-- Floating controls over the map, top right: view toggle, then a locate button.
+- Floating controls over the map, top right: a locate button when added.
 - Attribution bottom left of the map, text from the tile manifest (see decision 004). On a phone it is one line, "© OpenStreetMap, Overture, Google", plus an info button labeled "Sources". The button opens the full manifest text. A wide window shows that full text in place.
 - On a wide window the sheet is a floating column on the left, about 420 px, instead of the full width.
 
@@ -24,7 +24,7 @@ Feel: Apple Maps. The map is the screen. Text is minimal and navigation is obvio
 
 ### Search
 
-- Map shows BGC, 3D, pitched.
+- Map shows BGC, flat, north up.
 - Sheet at peek: a field with the placeholder "Where to?", then two large rows, "Bonifacio High Street" and "Market! Market!".
 - The field filters named places from the pilot build. The first pick is the start. The next pick, a row, or a map tap sets the end and opens Compare.
 - Full detent: "Leave now" and recents. "Leave now" opens a time picker on the 30 minute slot grid.
@@ -42,20 +42,18 @@ Feel: Apple Maps. The map is the screen. Text is minimal and navigation is obvio
 
 ### In-route
 
-- Camera follows the position. 3D pitches behind the walker. 2D is heading up.
+- Camera follows the position, flat, heading up.
 - Top banner: next turn and the street name when the graph has a name. This graph does not, so the banner says "Keep going" and the distance.
 - Sheet at peek: the Estimate badge, minutes left, minutes in sun left, the label "Building-only estimate, no trees", and "End". The peek fits those lines, including the safe area.
 - Sheet text is 15 or larger. Minutes in sun stays at 34.
 - Off route: banner "Off route" with the action "Reroute", which reruns the router from the current position.
 - The position advances with elapsed time. Minutes left, minutes in sun left, and the distance shrink. The shade slot shifts by that elapsed time. The app does not fetch a new route for that shift.
 
-## 3D and 2D
+## Map
 
-- Toggle is a two-segment control: "3D" and "2D". Selected segment is filled. The choice persists.
-- 3D: extruded buildings, one light setup on every screen, sun light from the slot, soft shadows on the ground, route ribbon above the road. A shaded wall stays a mid warm tan.
-- 2D: a flat light basemap of roads, parks, and water from OpenStreetMap, plus place labels. No building fills or extrusions. Shadow polygons for the selected slot sit as a soft translucent layer, and the route line sits on top. Shadows follow the scrubber.
-- Switching animates the camera pitch in 350 ms or less. With reduced motion it cuts.
-- When WebGL is unavailable the app opens in 2D and hides the toggle.
+- Flat basemap of roads, parks, and water from OpenStreetMap, plus place labels. No building fills or extrusions. Pitch and bearing stay at zero. Map rotation and pitch gestures are off.
+- Shadow polygons for the selected slot sit as a soft translucent layer, and the route line sits on top. Shadows follow the scrubber.
+- Camera moves on route fit and in-route follow animate in 350 ms or less. With reduced motion they cut.
 
 ## Shade styling
 

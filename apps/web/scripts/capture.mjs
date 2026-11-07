@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, rm } from "node:fs/promises";
+import { copyFile, mkdir, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,9 +40,10 @@ try {
   });
   const outDir = resolve(root, "screenshots");
   await mkdir(outDir, { recursive: true });
-  await rm(resolve(outDir, "2d-compare.png"), { force: true });
-  await rm(resolve(outDir, "3d-compare.png"), { force: true });
+  await rm(resolve(outDir, "compare.png"), { force: true });
   await rm(resolve(outDir, "in-route.png"), { force: true });
+  const artifacts = "/opt/cursor/artifacts";
+  await mkdir(artifacts, { recursive: true });
 
   if (process.env.SHOTS_ONLY !== "1") {
   const measure = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -129,18 +130,18 @@ try {
 
   for (const size of [
     { name: "phone", width: 390, height: 844, deviceScaleFactor: 2 },
-    { name: "desktop", width: 1280, height: 800, deviceScaleFactor: 1 },
+    { name: "desktop", width: 1440, height: 900, deviceScaleFactor: 1 },
   ]) {
-    await shoot(browser, size, "light");
+    await shoot(browser, size, "light", artifacts);
   }
-  await shoot(browser, { name: "phone", width: 390, height: 844, deviceScaleFactor: 2 }, "dark");
-  await shoot(browser, { name: "desktop", width: 1280, height: 800, deviceScaleFactor: 1 }, "dark");
+  await shoot(browser, { name: "phone", width: 390, height: 844, deviceScaleFactor: 2 }, "dark", artifacts);
+  await shoot(browser, { name: "desktop", width: 1440, height: 900, deviceScaleFactor: 1 }, "dark", artifacts);
   await browser.close();
 } finally {
   server.kill("SIGTERM");
 }
 
-async function shoot(browser, size, scheme) {
+async function shoot(browser, size, scheme, artifactsDir) {
   const context = await browser.newContext({
     viewport: { width: size.width, height: size.height },
     deviceScaleFactor: size.deviceScaleFactor,
@@ -152,23 +153,22 @@ async function shoot(browser, size, scheme) {
   await page.waitForSelector(".maplibregl-canvas", { timeout: 30_000 });
   await page.waitForFunction(() => window.__shadeway?.places?.length, null, { timeout: 60_000 });
   const suffix = scheme === "dark" ? "-dark" : "";
-  await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-search${suffix}.png`) });
+  const searchPath = resolve(root, "screenshots", `${size.name}-search${suffix}.png`);
+  await page.screenshot({ path: searchPath });
+  if (scheme === "light") await copyFile(searchPath, resolve(artifactsDir, `${size.name}-search.png`));
   await page.evaluate((from) => window.__shadeway.pick(from), shotWalk.from);
   await page.evaluate((to) => window.__shadeway.pick(to), shotWalk.to);
   await page.waitForSelector(".route-card__sun", { timeout: 30_000 });
   await setSlot(page, "12", "12:00");
-  await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-compare-3d${suffix}.png`) });
-  await page.getByRole("button", { name: "2D" }).click();
-  await page.waitForTimeout(800);
-  await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-compare-2d${suffix}.png`) });
+  const comparePath = resolve(root, "screenshots", `${size.name}-compare${suffix}.png`);
+  await page.screenshot({ path: comparePath });
+  if (scheme === "light") await copyFile(comparePath, resolve(artifactsDir, `${size.name}-compare.png`));
   if (scheme === "light") {
     await setSlot(page, "6", "09:00");
     await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-compare-0900.png`) });
     await setSlot(page, "18", "15:00");
     await page.screenshot({ path: resolve(root, "screenshots", `${size.name}-compare-1500.png`) });
   }
-  await page.getByRole("button", { name: "3D" }).click();
-  await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Start" }).click();
   await page.waitForSelector(".in-route-screen");
   await page.waitForTimeout(800);
@@ -203,8 +203,6 @@ async function exercise(browser) {
   if (at9.join("|") === at15.join("|")) throw new Error(`sun minutes did not change ${at9.join("|")}`);
   await page.getByRole("button", { name: "Now", exact: true }).click();
   await page.waitForFunction(() => document.querySelector(".time-scrubber__label")?.textContent === "Now");
-  await page.getByRole("button", { name: "2D" }).click();
-  await page.getByRole("button", { name: "3D" }).click();
   await setSlot(page, "12", "12:00");
   await page.getByRole("button", { name: "Start" }).click();
   await page.waitForSelector(".in-route-banner");
@@ -223,7 +221,7 @@ async function exercise(browser) {
   await page.waitForFunction(() => document.body.innerText.includes("Outside the pilot area"));
   await phone.close();
 
-  const desktop = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const desktop = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const wide = await desktop.newPage();
   await wide.goto(`http://127.0.0.1:${port}`, { waitUntil: "networkidle" });
   await wide.waitForSelector(".shadeway-sheet");

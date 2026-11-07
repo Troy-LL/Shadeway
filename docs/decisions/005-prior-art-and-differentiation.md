@@ -18,7 +18,7 @@ We will credit prior art and differentiate on what it does not show.
 
 - Honest shade: labels, a confidence badge, and a published match rate over walked segments ([002](002-honest-data-labels.md)).
 - One shade model for route cost and drawn shadows, with a fixture test that they agree ([001](001-one-shared-shade-model.md)).
-- A 3D-first map that translates to a 2D view drawing the shadows along the chosen route.
+- A flat 2D map drawing the shadows along the chosen route.
 - Covered walkways, skybridges, and overpasses in BGC treated as first-class data, not a footnote.
 
 We will not copy code from these projects. We may read their methods. Any code we do take keeps its license notice and is named in the commit that adds it.

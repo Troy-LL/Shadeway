@@ -3,7 +3,7 @@ import { SLOT_GRID } from "@shadeway/contract";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createMapController } from "./controller";
 import type { PilotData } from "./pilot";
-import type { CameraMove, DeckScene, MapView } from "./view";
+import type { CameraMove, MapScene, MapView } from "./view";
 
 function manifest(): TileManifest {
   return {
@@ -40,7 +40,7 @@ function pilot(): PilotData {
 }
 
 function fakeView(): MapView & {
-  scene: DeckScene | null;
+  scene: MapScene | null;
   cameras: CameraMove[];
   durations: number[];
   fitted: number;
@@ -48,7 +48,7 @@ function fakeView(): MapView & {
   tap: ((position: LngLat) => void) | null;
 } {
   const view = {
-    scene: null as DeckScene | null,
+    scene: null as MapScene | null,
     cameras: [] as CameraMove[],
     durations: [] as number[],
     fitted: 0,
@@ -57,7 +57,7 @@ function fakeView(): MapView & {
     setRoads() {},
     setLand() {},
     setLabels() {},
-    setDeck(scene: DeckScene) {
+    setScene(scene: MapScene) {
       view.scene = scene;
     },
     ease(camera: CameraMove, durationMs: number) {
@@ -97,20 +97,16 @@ describe("MapController", () => {
     controller.setSlot(18);
     controller.setRoute({ weight: "shadiest", coordinates: route });
     controller.setRoute({ weight: "shadiest", coordinates: [] });
-    expect(view.scene?.extruded).toBe(true);
     expect(view.scene?.shadows.some((shadow) => shadow.estimated)).toBe(true);
     expect((view.scene?.route.sunny.length ?? 0) + (view.scene?.route.shaded.length ?? 0)).toBeGreaterThan(0);
     controller.fitRoute();
     expect(view.fitted).toBe(1);
     expect(view.durations.at(-1)).toBeLessThan(400);
-    controller.setViewMode("2d");
-    expect(view.scene?.buildings).toEqual([]);
-    expect(view.scene?.extruded).toBe(false);
     expect(view.cameras.at(-1)?.pitch).toBe(0);
-    expect(view.durations.at(-1)).toBeLessThanOrEqual(350);
+    expect(view.cameras.at(-1)?.bearing).toBe(0);
   });
 
-  it("places markers, follows with a pitched camera, and reports taps", () => {
+  it("places markers, follows with a flat camera, and reports taps", () => {
     const view = fakeView();
     const root = document.createElement("div");
     const controller = createMapController(root, { createView: () => view, pilot: pilot() });
@@ -120,7 +116,7 @@ describe("MapController", () => {
     expect(view.markers.start).toEqual(route[0]);
     expect(view.markers.end).toEqual(route[2]);
     controller.followPosition(true);
-    expect(view.cameras.at(-1)?.pitch).toBe(46);
+    expect(view.cameras.at(-1)?.pitch).toBe(0);
     const taps: LngLat[] = [];
     const unsubscribe = controller.subscribeMapTap((position) => taps.push(position));
     view.tap?.([121.05, 14.55]);
@@ -145,7 +141,7 @@ describe("MapController", () => {
     })) as typeof window.matchMedia;
     const view = fakeView();
     const controller = createMapController(document.createElement("div"), { createView: () => view, pilot: pilot() });
-    controller.setViewMode("2d");
+    controller.fitRoute();
     expect(view.durations.at(-1)).toBe(0);
     window.matchMedia = previous;
   });

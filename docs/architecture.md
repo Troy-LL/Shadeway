@@ -14,7 +14,7 @@ Shadeway is a static web app plus an offline data pipeline. Stack and hosting ar
 - `packages/shade-model` - sun position, shadow polygons, edge sun fraction. Pure TypeScript, runs in Node and the browser.
 - `packages/pipeline` - Node CLI. Output is `data/build/<area>/`, served with the local app.
 - `packages/router` - tile loader and A* in a Web Worker. No DOM.
-- `apps/web` - MapLibre GL JS and deck.gl map in `src/map`, screens in `src/ui`.
+- `apps/web` - MapLibre GL JS map in `src/map`, screens in `src/ui`.
 
 ## Data flow
 
@@ -23,7 +23,7 @@ Shadeway is a static web app plus an offline data pipeline. Stack and hosting ar
 3. It writes a build report: edge count, buildings by height source (`osm`, `levels`, `raster`, `default`, `override`), covered edges, bridge edges, override edges, and the mean absolute error of sun fraction at 12:00 Asia/Manila on 2026-05-01 against the reference-day interpolation, on edges that are not forced to full shade.
 4. The web app fetches the tile manifest, loads tiles that cover the corridor between start and end, and hands them to the router worker.
 5. The worker runs A* with cost from [001](decisions/001-one-shared-shade-model.md) at three weights: fastest, balanced, shadiest. The slot used for an edge is the slot the walker reaches it, from the chosen departure time.
-6. The map draws the chosen route and, for the corridor around it, shadow polygons computed by `packages/shade-model` for the departure slot. 3D uses extruded buildings and sun lighting from the same sun position.
+6. The map draws the chosen route and, for the corridor around it, shadow polygons computed by `packages/shade-model` for the departure slot.
 
 Basemap: `build:pilot` writes `data/build/bgc/basemap.geojson`, one static GeoJSON file of the walking graph, the building footprints, and OpenStreetMap parks and water for the pilot box. It is not a vector-tile archive. A PMTiles or MVT extract was not built: the pipeline does not download a planet basemap and has no vector-tile encoder. `apps/web` can load this GeoJSON, or keep a public OpenStreetMap-based style in dev. Attribution is shown on the map from the tile manifest.
 
@@ -60,7 +60,7 @@ Each bar is counted. A phase is done when every bar is true.
 
 ### Phase one: pilot, building-only estimate
 
-Scope: BGC, building shadows plus covered and bridge handling, 2D route with shadow polygons, basic 3D view.
+Scope: BGC, building shadows plus covered and bridge handling, flat 2D route with shadow polygons.
 
 - The Data sources section above holds 9 measured BGC counts. The independent cross-check is a second measurement over a different box and does not replace those counts.
 - 1 command, `pnpm --filter @shadeway/pipeline build:pilot`, builds pilot tiles in CI with 0 failed steps.
@@ -73,12 +73,12 @@ Scope: BGC, building shadows plus covered and bridge handling, 2D route with sha
 
 Counted on 2026-10-26: 6 of 8 met. Those six are engineering bars. `build:pilot` has not run in CI, so that engineering bar is unmet. The only truth bar is 20 walked segments scored, and it is unmet. README states that no match rate is claimed.
 
-### Phase two: canopy and 3D polish
+### Phase two: canopy polish
 
 - Canopy from the Meta and WRI raster per [004](decisions/004-data-sources-and-licenses.md), with a BGC check of at least 20 sample points against photos or walked observations, including newer construction.
 - Canopy enters through `packages/shade-model` with transmittance. 0 other files compute canopy shade.
 - 20 new walked segments on tree-lined streets are scored and the README match rate is updated.
-- 3D: tree volumes for canopy, smooth camera moves between 2D and 3D under 400 ms, sun lighting matches the slot.
+- Map: tree volumes for canopy when drawn on the flat map.
 - Badge reads `Estimate + canopy` on routes that include canopy values.
 
 ### Phase three: more areas
@@ -121,7 +121,7 @@ Part A runs first and merges before part B starts shading.
 ### Track 4: web map
 
 - Read: [design.md](design.md), [001](decisions/001-one-shared-shade-model.md), `packages/contract/src/index.ts`.
-- Done: MapLibre basemap with attribution; deck.gl extruded buildings with sun lighting; 3D and 2D views and the toggle with a camera transition; route layer with sun and shade styling per design; shadow polygons for the route corridor from `packages/shade-model`; estimated-height buildings drawn with the dashed shadow edge; a `MapController` interface in `apps/web/src/map/controller.ts` that Track 5 calls (set route, set view mode, set slot, fit route, follow position).
+- Done: MapLibre basemap with attribution; flat map with pitch and bearing fixed at zero; route layer with sun and shade styling per design; shadow polygons for the route corridor from `packages/shade-model`; estimated-height buildings drawn with the dashed shadow edge; a `MapController` interface in `apps/web/src/map/controller.ts` that Track 5 calls (set route, set slot, fit route, follow position).
 - Fences: owns `apps/web/src/map`; no UI sheet code; no shade computation outside `packages/shade-model`.
 
 ### Track 5: web screens
@@ -142,7 +142,7 @@ Part A runs first and merges before part B starts shading.
 - Done: web app loads real pilot tiles and routes the 3 pilot walks; every phase one bar is checked and listed with its count in the pull request; a template for logging the 20 walked segments is committed; the hand comparison of 3 BGC routes against undercover.ph from decision 005 is written up in the pull request; README Status and Run sections match what runs.
 - Fences: edits across packages only to fix integration; no new feature; no accuracy statement until the scorer reports.
 
-Later tracks, split when phase one lands: canopy ingest and shade-model transmittance, 3D polish, area config and extra areas.
+Later tracks, split when phase one lands: canopy ingest and shade-model transmittance, area config and extra areas.
 
 ## History
 
