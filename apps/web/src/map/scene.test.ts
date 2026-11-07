@@ -43,7 +43,7 @@ describe("follow camera", () => {
 describe("shadow draws", () => {
   it("dashes an estimated height and keeps an OSM height solid", () => {
     const sun = shadeModel.sunPosition({ date: "2026-10-26", minutes: slotStartMinutes(18) }, origin);
-    const draws = shadowDraws([square("est", "raster"), square("tag", "osm")], sun);
+    const draws = shadowDraws([square("est", "raster"), square("tag", "osm")], [], sun);
     const estimated = draws.find((draw) => draw.estimated);
     const measured = draws.find((draw) => !draw.estimated);
     expect(estimated?.ring.at(0)).toEqual(estimated?.ring.at(-1));

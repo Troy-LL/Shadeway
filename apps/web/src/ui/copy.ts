@@ -1,6 +1,7 @@
 /** Exact UI strings from docs/design.md Copy section and screen specs. */
 
-export const ROUTE_ESTIMATE_LABEL = "Building-only estimate, no trees";
+export const ROUTE_ESTIMATE_LABEL =
+  "Estimate from buildings and a satellite tree map, not field-checked";
 
 export const COPY = {
   whereTo: "Where to?",
@@ -32,7 +33,7 @@ export const COPY = {
   noMatchingPlace: "No matching place in the pilot area",
   outsidePilot: "Outside the pilot area",
   couldNotLoadShade: "Could not load shade",
-  attributionShort: "© OpenStreetMap, Overture, Google",
+  attributionShort: "© OpenStreetMap, Overture, Google, Meta/WRI canopy",
   sources: "Sources",
 } as const;
 

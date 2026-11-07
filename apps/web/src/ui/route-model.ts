@@ -22,7 +22,7 @@ export function cardsFromResults(
   routes: Readonly<Record<RouteWeight, RouteResult | null>>,
   graph: GraphFile,
   tiles: readonly SunTile[],
-  options: { readonly shadeCoverageUnavailable?: boolean } = {},
+  options: { readonly shadeCoverageUnavailable?: boolean; readonly canopy?: boolean } = {},
 ): RouteCardModel[] {
   const fastest = routes.fastest;
   const shadiest = routes.shadiest;
@@ -44,7 +44,7 @@ export function cardsFromResults(
       totalMinutes: Math.round(result.durationS / 60),
       sunMinutes: unavailable ? null : Math.round(result.sunSeconds / 60),
       segments: unavailable ? [] : segmentsForRoute(graph, tiles, result),
-      confidence: "Estimate",
+      confidence: options.canopy ? "Estimate + canopy" : "Estimate",
       geometry: result.geometry,
       distanceM: result.distanceM,
       edgeKey: result.edgeIds.join(","),

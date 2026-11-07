@@ -71,7 +71,9 @@ export function renderCompareContent(state: UiState, handlers: CompareHandlers):
   );
   const badge = document.createElement("span");
   badge.className = "confidence-badge";
-  badge.textContent = "Estimate";
+  badge.textContent = state.routes.some((route) => route.confidence === "Estimate + canopy")
+    ? "Estimate + canopy"
+    : "Estimate";
   chips.append(badge);
   header.append(back, chips);
   container.append(header);

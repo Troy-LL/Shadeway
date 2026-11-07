@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@shadeway/contract": "workspace:*",
+    "@shadeway/router": "workspace:*",
     "@shadeway/shade-model": "workspace:*",
     "geotiff": "^2.1.3"
   },

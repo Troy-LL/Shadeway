@@ -388,6 +388,32 @@ describe("edge sun fraction", () => {
   });
 });
 
+describe("tree shadows", () => {
+  it("casts a partial shadow with the configured transmittance", () => {
+    const tree = {
+      id: "tree-1",
+      footprint: SQUARE.map(([east, north]) => lngLat(east, north)),
+      crownHeightM: HEIGHT_M,
+      transmittance: 0.35,
+    };
+    const sunNoon = sun(180, 60);
+    const treeShadow = shadeModel.treeShadowPolygons([tree], sunNoon);
+    expect(treeShadow).toHaveLength(1);
+    expect(treeShadow[0]?.kind).toBe("tree");
+    const ring = treeShadow[0]?.ring ?? [];
+    const shadowPoint = ring[Math.floor(ring.length / 2)] ?? lngLat(5, -8);
+    const buildings = shadeModel.shadowPolygons([building("b1", [[30, 0], [40, 0], [40, 10], [30, 10]])], sunNoon);
+    const onlyTree = shadeModel.pointSunFraction(shadowPoint, treeShadow);
+    expect(onlyTree).toBeCloseTo(0.35, 5);
+    const buildingShadow = buildings[0]?.ring[0];
+    if (buildingShadow === undefined) throw new Error("missing building shadow");
+    const combined = [...buildings, ...treeShadow];
+    expect(shadeModel.pointSunFraction(buildingShadow, combined)).toBe(0);
+    const clear = lngLat(-10, 5);
+    expect(shadeModel.pointSunFraction(clear, combined)).toBe(1);
+  });
+});
+
 describe("transmittance", () => {
   it("passes all light until canopy exists", () => {
     expect(shadeModel.transmittance(ORIGIN)).toBe(1);

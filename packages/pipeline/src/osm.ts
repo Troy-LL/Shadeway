@@ -22,23 +22,56 @@ type OverpassPayload = {
   elements: OverpassElement[];
 };
 
+export type OsmTreePoint = {
+  id: number;
+  lon: number;
+  lat: number;
+  heightM?: number;
+};
+
+export type OsmTreeRow = {
+  id: number;
+  nodes: { id: number; lon: number; lat: number }[];
+};
+
 export type OsmExtract = {
   endpoint: string;
   osmTimestamp: string;
   ways: OsmWay[];
   treePoints: number;
+  trees: OsmTreePoint[];
+  treeRows: OsmTreeRow[];
 };
 
-export function readOverpass(payload: OverpassPayload): { ways: OsmWay[]; treePoints: number } {
-  const coords = new Map<number, { lon: number; lat: number }>();
-  const trees = new Set<number>();
+export function readOverpass(payload: OverpassPayload): {
+  ways: OsmWay[];
+  treePoints: number;
+  trees: OsmTreePoint[];
+  treeRows: OsmTreeRow[];
+} {
+  const coords = new Map<number, { lon: number; lat: number; tags?: Record<string, string> }>();
   for (const element of payload.elements) {
     if (element.type !== "node" || element.lon === undefined || element.lat === undefined) continue;
-    coords.set(element.id, { lon: element.lon, lat: element.lat });
-    if (element.tags?.natural === "tree") trees.add(element.id);
+    coords.set(element.id, {
+      lon: element.lon,
+      lat: element.lat,
+      ...(element.tags === undefined ? {} : { tags: element.tags }),
+    });
   }
-  const treePoints = trees.size;
+  const trees: OsmTreePoint[] = [];
+  for (const [id, node] of coords) {
+    if (node.tags?.natural !== "tree") continue;
+    const heightTag = node.tags?.height;
+    const heightM = heightTag !== undefined ? Number(heightTag) : undefined;
+    trees.push({
+      id,
+      lon: node.lon,
+      lat: node.lat,
+      ...(Number.isFinite(heightM) && heightM! > 0 ? { heightM: heightM! } : {}),
+    });
+  }
   const ways: OsmWay[] = [];
+  const treeRows: OsmTreeRow[] = [];
   for (const element of payload.elements) {
     if (element.type !== "way" || element.nodes === undefined) continue;
     const nodes = [];
@@ -47,9 +80,13 @@ export function readOverpass(payload: OverpassPayload): { ways: OsmWay[]; treePo
       if (point === undefined) continue;
       nodes.push({ id, lon: point.lon, lat: point.lat });
     }
+    if (element.tags?.natural === "tree_row") {
+      treeRows.push({ id: element.id, nodes });
+      continue;
+    }
     ways.push({ id: element.id, tags: element.tags ?? {}, nodes });
   }
-  return { ways, treePoints };
+  return { ways, treePoints: trees.length, trees, treeRows };
 }
 
 export async function fetchOsm(box: BBox): Promise<OsmExtract> {
@@ -57,6 +94,7 @@ export async function fetchOsm(box: BBox): Promise<OsmExtract> {
 (
   way["highway"~"^(footway|pedestrian|path|steps|sidewalk|crossing|corridor)$"](${box.south},${box.west},${box.north},${box.east});
   node["natural"="tree"](${box.south},${box.west},${box.north},${box.east});
+  way["natural"="tree_row"](${box.south},${box.west},${box.north},${box.east});
 );
 out body;
 >;
@@ -68,6 +106,8 @@ out skel qt;`;
     osmTimestamp: payload.osm3s?.timestamp_osm_base ?? "unknown",
     ways: parsed.ways,
     treePoints: parsed.treePoints,
+    trees: parsed.trees,
+    treeRows: parsed.treeRows,
   };
 }
 

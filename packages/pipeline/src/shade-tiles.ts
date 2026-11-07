@@ -12,6 +12,7 @@ import {
   type ShadowPolygon,
   type SunPosition,
   type SunTile,
+  type TreeCaster,
 } from "@shadeway/contract";
 import { shadeModel } from "@shadeway/shade-model";
 import { isFullyShaded } from "./tags.js";
@@ -31,6 +32,7 @@ export type ShadeTiles = {
 export function shadeEdges(input: {
   edges: readonly Edge[];
   buildings: readonly Building[];
+  trees?: readonly TreeCaster[];
   location: LngLat;
   date: string;
   minutes: number;
@@ -46,7 +48,7 @@ export function shadeEdges(input: {
     for (let slot = 0; slot < SLOT_GRID.count; slot += 1) {
       const started = Date.now();
       const position = shadeModel.referenceSunPosition(day, slot, input.location);
-      const fractions = fractionsFor(input.edges, input.buildings, position);
+      const fractions = fractionsFor(input.edges, input.buildings, input.trees ?? [], position);
       fractions.forEach((fraction, edgeIndex) => {
         sun[edgeIndex * SLOT_GRID.count + slot] = encodeSunFraction(fraction);
         if (slot === checkSlot) atCheck[day][edgeIndex] = fraction;
@@ -64,13 +66,44 @@ export function shadeEdges(input: {
   return { files, interpolation: interpolationError(input, atCheck) };
 }
 
+export function noonEdgeChangeShare(
+  edges: readonly Edge[],
+  buildings: readonly Building[],
+  trees: readonly TreeCaster[],
+  location: LngLat,
+): number {
+  const slot = nearestSlot(12 * 60);
+  if (slot === null) return 0;
+  const sun = shadeModel.referenceSunPosition("june-solstice", slot, location);
+  const buildingOnly = fractionsFor(edges, buildings, [], sun);
+  const withTrees = fractionsFor(edges, buildings, trees, sun);
+  let changed = 0;
+  let open = 0;
+  edges.forEach((edge, index) => {
+    if (isFullyShaded(edge)) return;
+    open += 1;
+    const before = buildingOnly[index];
+    const after = withTrees[index];
+    if (before === null || after === null || before === undefined || after === undefined) return;
+    if (Math.abs(before - after) > 1e-4) changed += 1;
+  });
+  return open === 0 ? 0 : changed / open;
+}
+
 function interpolationError(
-  input: { edges: readonly Edge[]; buildings: readonly Building[]; location: LngLat; date: string; minutes: number },
+  input: {
+    edges: readonly Edge[];
+    buildings: readonly Building[];
+    trees?: readonly TreeCaster[];
+    location: LngLat;
+    date: string;
+    minutes: number;
+  },
   atCheck: Record<ReferenceDay, (number | null)[]>,
 ): ShadeTiles["interpolation"] {
   const day = shadeModel.sunDay(input.date);
   const position = shadeModel.sunPosition({ date: input.date, minutes: input.minutes }, input.location);
-  const direct = fractionsFor(input.edges, input.buildings, position);
+  const direct = fractionsFor(input.edges, input.buildings, input.trees ?? [], position);
   let edges = 0;
   let error = 0;
   input.edges.forEach((edge, edgeIndex) => {
@@ -97,8 +130,17 @@ function interpolationError(
   };
 }
 
-function fractionsFor(edges: readonly Edge[], buildings: readonly Building[], sun: SunPosition): (number | null)[] {
-  const index = indexShadows(shadeModel.shadowPolygons(buildings, sun));
+function shadowsFor(buildings: readonly Building[], trees: readonly TreeCaster[], sun: SunPosition): readonly ShadowPolygon[] {
+  return [...shadeModel.shadowPolygons(buildings, sun), ...shadeModel.treeShadowPolygons(trees, sun)];
+}
+
+function fractionsFor(
+  edges: readonly Edge[],
+  buildings: readonly Building[],
+  trees: readonly TreeCaster[],
+  sun: SunPosition,
+): (number | null)[] {
+  const index = indexShadows(shadowsFor(buildings, trees, sun));
   return edges.map((edge) => fractionFor(edge, sun, index));
 }
 

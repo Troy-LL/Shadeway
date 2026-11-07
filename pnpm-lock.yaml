@@ -50,6 +50,9 @@ importers:
       '@shadeway/contract':
         specifier: workspace:*
         version: link:../contract
+      '@shadeway/router':
+        specifier: workspace:*
+        version: link:../router
       '@shadeway/shade-model':
         specifier: workspace:*
         version: link:../shade-model

@@ -34,6 +34,7 @@ describe("attribution", () => {
     const text = ATTRIBUTION.join("\n");
     expect(text).toContain("ODbL");
     expect(text).toContain("CC BY 4.0");
+    expect(text).toContain("Meta and WRI");
   });
 });
 

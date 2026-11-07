@@ -1,4 +1,4 @@
-import type { Building, Edge, LngLat, SunPosition } from "@shadeway/contract";
+import type { Building, Edge, LngLat, SunPosition, TreeCaster } from "@shadeway/contract";
 import { shadeModel } from "@shadeway/shade-model";
 
 const METERS_PER_DEG_LAT = 111_320;
@@ -6,6 +6,8 @@ const METERS_PER_DEG_LAT = 111_320;
 export interface ShadowDraw {
   readonly ring: readonly LngLat[];
   readonly estimated: boolean;
+  readonly kind: "building" | "tree";
+  readonly transmittance?: number;
 }
 
 export interface RouteDraw {
@@ -32,21 +34,54 @@ export function buildingsNearRoute(
   return buildings.filter((building) => ringHits(building.footprint, bounds));
 }
 
-export function shadowDraws(buildings: readonly Building[], sun: SunPosition): ShadowDraw[] {
-  return shadeModel.shadowPolygons(buildings, sun).flatMap((shadow) => {
+export function treesNearRoute(
+  trees: readonly TreeCaster[],
+  route: readonly LngLat[],
+  bufferM: number,
+): TreeCaster[] {
+  const bounds = expand(routeBounds(route), bufferM);
+  if (!bounds) return [];
+  return trees.filter((tree) => ringHits(tree.footprint, bounds));
+}
+
+export function shadowDraws(
+  buildings: readonly Building[],
+  trees: readonly TreeCaster[],
+  sun: SunPosition,
+): ShadowDraw[] {
+  const buildingDraws = shadeModel.shadowPolygons(buildings, sun).flatMap((shadow) => {
     const ring = closeRing(shadow.ring);
     if (ring.length < 4) return [];
-    return [{ ring, estimated: shadow.estimated }];
+    return [{ ring, estimated: shadow.estimated, kind: "building" as const }];
   });
+  const treeDraws = shadeModel.treeShadowPolygons(trees, sun).flatMap((shadow) => {
+    const ring = closeRing(shadow.ring);
+    if (ring.length < 4) return [];
+    return [
+      {
+        ring,
+        estimated: shadow.estimated,
+        kind: "tree" as const,
+        ...(shadow.transmittance === undefined ? {} : { transmittance: shadow.transmittance }),
+      },
+    ];
+  });
+  return [...buildingDraws, ...treeDraws];
 }
 
 export function paintRoute(
   route: readonly LngLat[],
   edges: readonly Edge[],
-  shadows: readonly { readonly ring: readonly LngLat[] }[],
+  shadows: readonly ShadowDraw[],
 ): RouteDraw {
   const covers = edgesOnRoute(edges, route).filter((edge) => edge.covered || edge.bridge);
-  const shadowPolygons = shadows.map((shadow) => ({ buildingId: "", ring: shadow.ring, estimated: false }));
+  const shadowPolygons = shadows.map((shadow) => ({
+    buildingId: "",
+    ring: shadow.ring,
+    estimated: shadow.estimated,
+    kind: shadow.kind,
+    ...(shadow.kind === "tree" && shadow.transmittance !== undefined ? { transmittance: shadow.transmittance } : {}),
+  }));
   const sunny: LngLat[][] = [];
   const shaded: LngLat[][] = [];
   let current: LngLat[] = [];
@@ -64,7 +99,7 @@ export function paintRoute(
   for (const point of resample(route, 14)) {
     const shade =
       covers.some((edge) => distanceToLine(point, edge.geometry) < 12) ||
-      shadeModel.isInShadow(point, shadowPolygons);
+      shadeModel.pointSunFraction(point, shadowPolygons) < 0.5;
     if (current.length > 0 && shade !== currentShade) {
       current.push(point);
       flush();

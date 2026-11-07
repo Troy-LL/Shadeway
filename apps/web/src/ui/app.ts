@@ -416,7 +416,10 @@ export function createUiApp(
       const sunDown = sun.elevationDeg <= 0;
       const outsideHours = state.departureIsNow && !shadeDepartureAvailable(manilaNowMinutes());
       const shadeUnavailable = sunDown || outsideHours;
-      const cards = cardsFromResults(routed, pilot.graph, pilot.tiles, { shadeCoverageUnavailable: shadeUnavailable });
+      const cards = cardsFromResults(routed, pilot.graph, pilot.tiles, {
+        shadeCoverageUnavailable: shadeUnavailable,
+        canopy: pilot.manifest.canopy === true,
+      });
       if (cards.length === 0) {
         map.setStartMarker(null);
         map.setEndMarker(null);

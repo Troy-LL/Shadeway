@@ -7,6 +7,7 @@ import {
   type LngLat,
   type SunTile,
   type TileManifest,
+  type TreeCaster,
 } from "@shadeway/contract";
 import { loadCorridor } from "@shadeway/router";
 
@@ -25,6 +26,7 @@ export interface PilotData {
   readonly graph: GraphFile;
   readonly tiles: readonly SunTile[];
   readonly buildings: readonly Building[];
+  readonly trees: readonly TreeCaster[];
   readonly roads: readonly (readonly LngLat[])[];
   readonly land: readonly LandArea[];
   readonly places: readonly PilotPlace[];
@@ -58,6 +60,7 @@ async function loadPilotOnce(dataUrl: string, fetchImpl: typeof fetch): Promise<
     return new Uint8Array(await response.arrayBuffer());
   });
   const buildings: Building[] = [];
+  const trees: TreeCaster[] = [];
   const roads: LngLat[][] = [];
   const land: LandArea[] = [];
   for (const feature of basemap.features) {
@@ -70,6 +73,19 @@ async function loadPilotOnce(dataUrl: string, fetchImpl: typeof fetch): Promise<
     if ((kind === "park" || kind === "water") && feature.geometry.type === "Polygon") {
       const ring = polygonRing(feature.geometry.coordinates);
       if (ring && ring.length >= 4) land.push({ kind, ring });
+      continue;
+    }
+    if (feature.properties.kind === "tree" && feature.geometry.type === "Polygon") {
+      const ring = openRing(polygonRing(feature.geometry.coordinates));
+      const crownHeightM = feature.properties.crownHeightM;
+      const transmittance = feature.properties.transmittance;
+      if (!ring || ring.length < 3 || typeof crownHeightM !== "number" || typeof transmittance !== "number") continue;
+      trees.push({
+        id: String(feature.properties.id),
+        footprint: ring,
+        crownHeightM,
+        transmittance,
+      });
       continue;
     }
     if (feature.properties.kind !== "building" || feature.geometry.type !== "Polygon") continue;
@@ -88,6 +104,7 @@ async function loadPilotOnce(dataUrl: string, fetchImpl: typeof fetch): Promise<
     graph,
     tiles,
     buildings,
+    trees,
     roads,
     land,
     places,
@@ -166,6 +183,8 @@ interface BasemapFeature {
     readonly id?: string | number;
     readonly heightM?: number;
     readonly heightSource?: string;
+    readonly crownHeightM?: number;
+    readonly transmittance?: number;
   };
   readonly geometry: {
     readonly type: string;

@@ -159,8 +159,14 @@ export async function measure(cacheDir: string): Promise<MeasureReport> {
       maxY: Math.max(...corners.map((corner) => corner.y)),
     };
     const window = await readRasterWindow(canopyTileUrl, 0, world);
-    if (!(window.values instanceof Uint8Array)) {
-      throw new Error("canopy band was not uint8");
+    if (
+      !(
+        window.values instanceof Uint8Array ||
+        window.values instanceof Float32Array ||
+        window.values instanceof Float64Array
+      )
+    ) {
+      throw new Error("canopy band was not numeric");
     }
     const counts = countCanopyPixels({
       originX: window.originX,

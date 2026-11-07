@@ -1,6 +1,18 @@
 import { mkdir } from "node:fs/promises";
 import { buildArea, type BuildReport } from "./build.js";
-import { bgcBox, googleImageryEnd, googleImageryStart, googleInferenceDate, googleManifestUrl, googleTileUrl } from "./config.js";
+import { loadCanopyGrid } from "./canopy.js";
+import {
+  bgcBox,
+  canopyObjectModified,
+  canopyTileUrl,
+  googleImageryEnd,
+  googleImageryStart,
+  googleInferenceDate,
+  googleManifestUrl,
+  googleTileUrl,
+} from "./config.js";
+import { toWebMercator } from "./project.js";
+import { buildTreeCasters } from "./trees.js";
 import { fetchLandcover, fetchNamedPlaces, fetchOsm } from "./osm.js";
 import { curatePlaces, placesFromWays } from "./places.js";
 import { loadOverrides } from "./overrides.js";
@@ -9,7 +21,12 @@ import { toUtm51N } from "./project.js";
 import { readRasterWindow } from "./raster.js";
 import { medianRasterHeight, type BuildingRecord, type HeightGrid, type Ring } from "./sample.js";
 
-export async function buildPilot(cacheDir: string, outDir: string, overridesPath: string): Promise<BuildReport> {
+export async function buildPilot(
+  cacheDir: string,
+  outDir: string,
+  overridesPath: string,
+  canopyPath?: string,
+): Promise<BuildReport> {
   await mkdir(cacheDir, { recursive: true });
   console.error("pilot osm");
   const osm = await fetchOsm(bgcBox);
@@ -34,7 +51,14 @@ export async function buildPilot(cacheDir: string, outDir: string, overridesPath
     { places: named.map((place) => ({ name: place.name, at: [place.lon, place.lat] as const })), rank: 100 },
     { places: placesFromWays(osm.ways), rank: 40 },
   ]);
-  console.error(`pilot shade ways=${osm.ways.length} buildingRows=${buildings.length} partRows=${parts.length} places=${places.length}`);
+  console.error("pilot canopy");
+  const canopyWorld = canopyWorldBox(bgcBox);
+  const canopyUrl = canopyPath ?? canopyTileUrl;
+  const canopyGrid = await loadCanopyGrid(canopyUrl, canopyWorld);
+  const treeBuild = buildTreeCasters(canopyGrid, osm.trees, osm.treeRows);
+  console.error(
+    `pilot shade ways=${osm.ways.length} buildingRows=${buildings.length} partRows=${parts.length} places=${places.length} treeCrowns=${treeBuild.trees.length}`,
+  );
   return buildArea({
     area: "bgc",
     box: bgcBox,
@@ -46,11 +70,29 @@ export async function buildPilot(cacheDir: string, outDir: string, overridesPath
     rasterHeight: (record) => rasterFor(record, grid),
     places,
     land,
+    trees: treeBuild.trees,
+    treeStats: { rasterCrowns: treeBuild.rasterCrowns, osmFallbackCrowns: treeBuild.osmFallbackCrowns },
     extraNotes: [
       `OpenStreetMap from ${osm.endpoint}, timestamp ${osm.osmTimestamp}.`,
       `Google height raster ${googleTileUrl} manifest ${googleManifestUrl} inference ${googleInferenceDate} imagery ${googleImageryStart} to ${googleImageryEnd}. Median of samples about 4 m apart inside the footprint.`,
+      `Meta and WRI canopy ${canopyUrl} object last modified ${canopyObjectModified}. Heights at or above 3 m vectorized to crowns; OSM natural=tree and tree_row fill gaps.`,
     ],
   });
+}
+
+function canopyWorldBox(box: typeof bgcBox): { minX: number; minY: number; maxX: number; maxY: number } {
+  const corners = [
+    toWebMercator(box.west, box.south),
+    toWebMercator(box.east, box.south),
+    toWebMercator(box.west, box.north),
+    toWebMercator(box.east, box.north),
+  ];
+  return {
+    minX: Math.min(...corners.map((corner) => corner.x)),
+    minY: Math.min(...corners.map((corner) => corner.y)),
+    maxX: Math.max(...corners.map((corner) => corner.x)),
+    maxY: Math.max(...corners.map((corner) => corner.y)),
+  };
 }
 
 async function loadGoogleHeightGrid(): Promise<HeightGrid> {
