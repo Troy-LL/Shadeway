@@ -90,8 +90,9 @@ describe("route shade strip", () => {
       graph,
       tiles,
     );
-    expect(same.find((card) => card.weight === "shadiest")?.note).toBe(COPY.sameRouteAsFastest);
+    expect(same.find((card) => card.weight === "shadiest")?.note).toBe(COPY.shadiestAndFastest);
     expect(same.find((card) => card.weight === "fastest")?.note).toBeUndefined();
+    expect(same).toHaveLength(2);
     expect(same.find((card) => card.weight === "shadiest")?.totalMinutes).toBe(2);
     expect(same.find((card) => card.weight === "shadiest")?.sunMinutes).toBe(1);
 

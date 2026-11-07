@@ -1,7 +1,7 @@
 import type { Building, GraphFile, LngLat, TileManifest } from "@shadeway/contract";
 import { SLOT_GRID } from "@shadeway/contract";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createMapController } from "./controller";
+import { SHADOW_FILL_KEY, createMapController } from "./controller";
 import type { PilotData } from "./pilot";
 import type { CameraMove, MapScene, MapView } from "./view";
 
@@ -56,7 +56,6 @@ function fakeView(): MapView & {
     tap: null as ((position: LngLat) => void) | null,
     setRoads() {},
     setLand() {},
-    setLabels() {},
     setScene(scene: MapScene) {
       view.scene = scene;
     },
@@ -123,6 +122,32 @@ describe("MapController", () => {
     unsubscribe();
     view.tap?.([0, 0]);
     expect(taps).toEqual([[121.05, 14.55]]);
+  });
+
+  it("keeps shadow fills off by default, toggles visibility, and persists", () => {
+    const view = fakeView();
+    const root = document.createElement("div");
+    document.body.append(root);
+    const controller = createMapController(root, { createView: () => view, pilot: pilot(), date: "2026-10-26" });
+    controller.setRoute({ weight: "shadiest", coordinates: route });
+    const toggle = root.querySelector<HTMLButtonElement>(".shadeway-shadow-toggle");
+    expect(toggle?.getAttribute("aria-pressed")).toBe("false");
+    expect(view.scene?.showShadowFill).toBe(false);
+    toggle?.click();
+    expect(toggle?.getAttribute("aria-pressed")).toBe("true");
+    expect(view.scene?.showShadowFill).toBe(true);
+    expect(localStorage.getItem(SHADOW_FILL_KEY)).toBe("1");
+    localStorage.setItem(SHADOW_FILL_KEY, "1");
+    const freshRoot = document.createElement("div");
+    const freshView = fakeView();
+    const fresh = createMapController(freshRoot, { createView: () => freshView, pilot: pilot() });
+    fresh.setRoute({ weight: "shadiest", coordinates: route });
+    const freshToggle = freshRoot.querySelector<HTMLButtonElement>(".shadeway-shadow-toggle");
+    expect(freshToggle?.getAttribute("aria-pressed")).toBe("true");
+    expect(freshView.scene?.showShadowFill).toBe(true);
+    freshToggle?.click();
+    expect(freshView.scene?.showShadowFill).toBe(false);
+    expect(localStorage.getItem(SHADOW_FILL_KEY)).toBe("0");
   });
 
   it("cuts the camera when reduced motion is set", () => {

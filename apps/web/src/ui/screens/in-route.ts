@@ -1,56 +1,47 @@
-import { COPY, ROUTE_ESTIMATE_LABEL, formatMinutes, formatMinutesInSun } from "../copy";
+import { COPY, ROUTE_ESTIMATE_LABEL, formatDistanceM, formatMinutes, formatMinutesInSun } from "../copy";
 import type { UiState } from "../types";
 
 export interface InRouteHandlers {
   readonly onEnd: () => void;
-  readonly onReroute: () => void;
-}
-
-export function renderInRouteBanner(state: UiState, handlers: InRouteHandlers): HTMLElement {
-  const banner = document.createElement("div");
-  banner.className = "in-route-banner";
-  banner.setAttribute("role", "status");
-
-  if (state.offRoute) {
-    const off = document.createElement("span");
-    off.textContent = `${COPY.offRoute} `;
-    const reroute = document.createElement("button");
-    reroute.type = "button";
-    reroute.className = "secondary-action";
-    reroute.textContent = COPY.reroute;
-    reroute.addEventListener("click", handlers.onReroute);
-    banner.append(off, reroute);
-    return banner;
-  }
-
-  banner.textContent = state.navigationLine;
-  return banner;
+  readonly onShowRoute: () => void;
 }
 
 export function renderInRouteContent(state: UiState, handlers: InRouteHandlers): HTMLElement {
   const container = document.createElement("div");
-  container.className = "in-route-screen in-route-sheet__row";
+  container.className = "in-route-screen";
 
-  const left = document.createElement("div");
-  const badge = document.createElement("span");
-  badge.className = "confidence-badge";
-  badge.textContent = "Estimate";
-  const minutes = document.createElement("p");
-  minutes.textContent = formatMinutes(state.minutesRemaining);
+  const status = document.createElement("p");
+  status.className = "in-route-screen__status";
+  status.textContent = COPY.routeOverview;
+
   const sun = document.createElement("p");
-  sun.className = "in-route-sheet__sun";
-  sun.textContent = formatMinutesInSun(state.sunMinutesRemaining);
+  sun.className = "in-route-screen__sun";
+  sun.textContent = formatMinutesInSun(state.tripSunMinutes);
+
+  const totals = document.createElement("p");
+  totals.className = "in-route-screen__totals";
+  totals.textContent = `${formatMinutes(state.tripMinutes)} · ${formatDistanceM(state.tripDistanceM)}`;
+
   const label = document.createElement("p");
-  label.className = "in-route-sheet__label";
+  label.className = "sheet-estimate-label";
   label.textContent = ROUTE_ESTIMATE_LABEL;
-  left.append(badge, minutes, sun, label);
+
+  const actions = document.createElement("div");
+  actions.className = "in-route-actions";
+
+  const showRoute = document.createElement("button");
+  showRoute.type = "button";
+  showRoute.className = "chip";
+  showRoute.textContent = COPY.showRoute;
+  showRoute.addEventListener("click", handlers.onShowRoute);
 
   const end = document.createElement("button");
   end.type = "button";
-  end.className = "chip chip--primary";
+  end.className = "primary-action primary-action--inline";
   end.textContent = COPY.end;
   end.addEventListener("click", handlers.onEnd);
 
-  container.append(left, end);
+  actions.append(showRoute, end);
+  container.append(status, sun, totals, label, actions);
   return container;
 }

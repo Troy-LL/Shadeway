@@ -1,37 +1,79 @@
 import type { RouteWeight } from "@shadeway/contract";
-import { COPY, ROUTE_ESTIMATE_LABEL, formatMinutes, formatMinutesInSun } from "../copy";
+import {
+  COPY,
+  ROUTE_ESTIMATE_LABEL,
+  formatDistanceM,
+  formatMinutes,
+  formatMinutesInSun,
+} from "../copy";
+import {
+  manilaNowMinutes,
+  renderDepartureChip,
+  renderDeparturePicker,
+  shadeDepartureAvailable,
+  slotStartMinutes,
+} from "../departure-time";
+import { compareRoutes } from "../route-model";
 import { renderShadeStrip } from "../shade-strip";
-import { renderTimeScrubber } from "../time-scrubber";
 import type { RouteCardModel, UiState } from "../types";
 import { renderStatusBlock } from "./status";
-
-const WEIGHT_LABEL: Record<RouteWeight, string> = {
-  shadiest: COPY.shadiest,
-  balanced: COPY.balanced,
-  fastest: COPY.fastest,
-};
 
 export interface CompareHandlers {
   readonly onSelectWeight: (weight: RouteWeight) => void;
   readonly onSlotChange: (slot: number) => void;
-  readonly onSnapNow: () => void;
+  readonly onPickNow: () => void;
+  readonly onToggleTimePicker: () => void;
   readonly onStart: () => void;
   readonly onTryAgain: () => void;
+  readonly onBack: () => void;
 }
 
 function visibleRoutes(state: UiState): readonly RouteCardModel[] {
-  if (state.status === "night") {
-    return state.routes.filter((route) => route.weight === "fastest");
+  const routes = compareRoutes(state.routes);
+  if (state.status === "shade-unavailable") {
+    return routes.length > 0 ? routes : state.routes.filter((route) => route.weight === "fastest");
   }
-  return state.routes;
+  return routes;
 }
 
 export function renderCompareContent(state: UiState, handlers: CompareHandlers): HTMLElement {
   const container = document.createElement("div");
   container.className = "compare-screen";
 
+  const header = document.createElement("div");
+  header.className = "compare-header";
+  const back = document.createElement("button");
+  back.type = "button";
+  back.className = "icon-button";
+  back.textContent = "←";
+  back.setAttribute("aria-label", COPY.back);
+  back.addEventListener("click", handlers.onBack);
+
+  const chips = document.createElement("div");
+  chips.className = "compare-header__chips";
+  const shadeAvailable = shadeDepartureAvailable(
+    state.departureIsNow ? manilaNowMinutes() : slotStartMinutes(state.slot),
+  );
+  chips.append(
+    renderDepartureChip({
+      slot: state.slot,
+      departureIsNow: state.departureIsNow,
+      shadeAvailable,
+      open: state.timePickerOpen,
+      onToggle: handlers.onToggleTimePicker,
+      onPickNow: handlers.onPickNow,
+      onPickSlot: (slot) => handlers.onSlotChange(slot),
+    }),
+  );
+  const badge = document.createElement("span");
+  badge.className = "confidence-badge";
+  badge.textContent = "Estimate";
+  chips.append(badge);
+  header.append(back, chips);
+  container.append(header);
+
   const status = renderStatusBlock(state, handlers.onTryAgain);
-  if (status && state.status !== "night") {
+  if (status && state.status !== "shade-unavailable") {
     container.append(status);
     return container;
   }
@@ -44,6 +86,20 @@ export function renderCompareContent(state: UiState, handlers: CompareHandlers):
 
   if (status) container.append(status);
 
+  if (state.timePickerOpen) {
+    container.append(
+      renderDeparturePicker({
+        slot: state.slot,
+        departureIsNow: state.departureIsNow,
+        shadeAvailable,
+        open: true,
+        onToggle: handlers.onToggleTimePicker,
+        onPickNow: handlers.onPickNow,
+        onPickSlot: (slot) => handlers.onSlotChange(slot),
+      }),
+    );
+  }
+
   const group = document.createElement("div");
   group.className = "route-cards";
   group.setAttribute("role", "radiogroup");
@@ -55,20 +111,13 @@ export function renderCompareContent(state: UiState, handlers: CompareHandlers):
   }
 
   container.append(group);
-  queueMicrotask(() => {
-    group.querySelector("[aria-checked='true']")?.scrollIntoView({ block: "nearest" });
-  });
 
-  if (state.status === "normal" || state.status === "night") {
-    container.append(
-      renderTimeScrubber({
-        slot: state.slot,
-        departureIsNow: state.departureIsNow,
-        onSlotChange: handlers.onSlotChange,
-        onSnapNow: handlers.onSnapNow,
-      }),
-    );
+  const estimate = document.createElement("p");
+  estimate.className = "sheet-estimate-label";
+  estimate.textContent = ROUTE_ESTIMATE_LABEL;
+  container.append(estimate);
 
+  if (state.status === "normal" || state.status === "shade-unavailable") {
     const start = document.createElement("button");
     start.type = "button";
     start.className = "primary-action";
@@ -93,43 +142,56 @@ function renderRouteCard(
   card.tabIndex = selected ? 0 : -1;
   card.addEventListener("click", () => onSelect(route.weight));
 
-  const badge = document.createElement("span");
-  badge.className = "confidence-badge";
-  badge.textContent = route.confidence;
-
   const title = document.createElement("h3");
   title.className = "route-card__title";
-  title.textContent = WEIGHT_LABEL[route.weight];
+  title.textContent = cardTitle(route);
 
-  const total = document.createElement("p");
-  total.className = "route-card__total";
-  total.textContent = formatMinutes(route.totalMinutes);
+  const meta = document.createElement("p");
+  meta.className = "route-card__meta";
+  const distance = formatDistanceM(route.distanceM);
+  meta.textContent = route.shadeUnavailable
+    ? `${formatMinutes(route.totalMinutes)} · ${distance}`
+    : `${formatMinutes(route.totalMinutes)} · ${distance}`;
 
   const sun = document.createElement("p");
   sun.className = "route-card__sun";
-  sun.textContent = formatMinutesInSun(route.sunMinutes);
+  if (route.shadeUnavailable) {
+    sun.textContent = COPY.shadeUnavailable;
+    sun.classList.add("route-card__sun--muted");
+  } else {
+    sun.textContent = formatMinutesInSun(route.sunMinutes);
+  }
 
-  const strip = renderShadeStrip(route.segments);
+  const strip = route.shadeUnavailable ? null : renderShadeStrip(route.segments);
 
-  const estimate = document.createElement("span");
-  estimate.className = "route-card__badge";
-  estimate.textContent = ROUTE_ESTIMATE_LABEL;
-
-  card.append(badge, sun, title);
+  card.append(sun, title);
   if (route.note) {
     const note = document.createElement("p");
     note.className = "route-card__note";
     note.textContent = route.note;
     card.append(note);
   }
-  card.append(total, strip, estimate);
+  card.append(meta);
+  if (strip) card.append(strip);
+  if (selected) {
+    const mark = document.createElement("span");
+    mark.className = "route-card__check";
+    mark.textContent = "✓";
+    mark.setAttribute("aria-hidden", "true");
+    card.append(mark);
+  }
   return card;
 }
 
-export function moveRouteSelection(
-  state: UiState,
-  direction: "next" | "prev",
-): RouteWeight | null {
+function cardTitle(route: RouteCardModel): string {
+  if (route.note === COPY.availableRoute) return COPY.availableRoute;
+  if (route.note === COPY.shadiestAndFastest) return COPY.shadiestAndFastest;
+  if (route.weight === "shadiest") return COPY.shadiest;
+  if (route.weight === "fastest" && route.shadeUnavailable) return COPY.fastestWalk;
+  return COPY.fastest;
+}
+
+export function moveRouteSelection(state: UiState, direction: "next" | "prev"): RouteWeight | null {
   const routes = visibleRoutes(state);
   const index = routes.findIndex((route) => route.weight === state.selectedWeight);
   if (index < 0) return routes[0]?.weight ?? null;

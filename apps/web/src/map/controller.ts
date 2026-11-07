@@ -25,6 +25,7 @@ export interface RouteGeometry {
  */
 export interface MapController {
   setRoute(route: RouteGeometry | null): void;
+  setAlternateRoute(route: RouteGeometry | null): void;
   setSlot(slot: SlotIndex): void;
   fitRoute(): void;
   followPosition(enabled: boolean): void;
@@ -46,8 +47,10 @@ export interface MapControllerOptions {
 }
 
 export const MAP_SUN_DATE = "2026-10-26";
+export const SHADOW_FILL_KEY = "shadeway-shadow-fill";
 const BGC: LngLat = [121.051, 14.5522];
 const EMPTY_ROUTE: RouteDraw = { sunny: [], shaded: [], ticks: [] };
+const MAP_SHADOWS_LABEL = "Shadows";
 
 export function createMapController(root: HTMLElement, options: MapControllerOptions = {}): MapController {
   const date = options.date ?? MAP_SUN_DATE;
@@ -65,6 +68,7 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
   let pilot: PilotData | null = options.pilot ?? null;
   let activeWeight: RouteWeight = "shadiest";
   const stored = new Map<RouteWeight, readonly LngLat[]>();
+  let inactiveCoordinates: readonly LngLat[] = [];
   let following = false;
   let followFraction = 0;
   let start: LngLat | null = null;
@@ -79,9 +83,17 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
   const message = document.createElement("div");
   message.className = "shadeway-map-message";
   message.hidden = true;
-  root.append(attribution, message);
+  let shadowFillVisible = readShadowFillPreference();
+  const shadowToggle = renderShadowToggle((next) => {
+    shadowFillVisible = next;
+    persistShadowFill(next);
+    paintShadowToggle(shadowToggle, next);
+    draw();
+  });
+  paintShadowToggle(shadowToggle, shadowFillVisible);
+  root.append(attribution, shadowToggle, message);
   root.append(styleElement());
-  watchSheet(attribution, () => {
+  watchSheet(attribution, shadowToggle, () => {
     if (!following) moveCamera(true);
   });
 
@@ -89,11 +101,16 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
     setRoute(route) {
       if (!route) {
         stored.clear();
+        inactiveCoordinates = [];
         draw();
         return;
       }
       activeWeight = route.weight;
       if (route.coordinates.length >= 2) stored.set(route.weight, route.coordinates);
+      draw();
+    },
+    setAlternateRoute(route) {
+      inactiveCoordinates = route && route.coordinates.length >= 2 ? route.coordinates : [];
       draw();
     },
     setSlot(next) {
@@ -162,7 +179,6 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
     paintAttribution();
     view.setRoads(pilot.roads);
     view.setLand(pilot.land);
-    view.setLabels(spacedLabels(pilot.places));
     draw();
     moveCamera(false);
     resolveReady(pilot);
@@ -182,7 +198,14 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
     const near = coordinates.length >= 2 ? buildingsNearRoute(pilot.buildings, coordinates, 280) : [];
     const shadows = shadowDraws(near, sun);
     const route = coordinates.length >= 2 ? paintRoute(coordinates, pilot.graph.edges, shadows) : EMPTY_ROUTE;
-    view.setScene({ shadows, route });
+    const buildingRings = near.map((building) => building.footprint);
+    view.setScene({
+      shadows,
+      route,
+      inactiveLine: inactiveCoordinates,
+      buildingFootprints: buildingRings,
+      showShadowFill: shadowFillVisible,
+    });
   }
 
   function moveCamera(fit: boolean): void {
@@ -208,6 +231,7 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
 export function createNoopMapController(): MapController {
   return {
     setRoute() {},
+    setAlternateRoute() {},
     setSlot() {},
     fitRoute() {},
     followPosition() {},
@@ -224,28 +248,37 @@ export function createNoopMapController(): MapController {
   };
 }
 
-function spacedLabels(places: PilotData["places"]): { name: string; at: LngLat }[] {
-  const ranked = [...places].sort((a, b) => labelRank(a.name) - labelRank(b.name) || a.name.localeCompare(b.name));
-  const picked: { name: string; at: LngLat }[] = [];
-  for (const place of ranked) {
-    if (picked.some((kept) => labelNear(kept.at, place.at))) continue;
-    picked.push({ name: place.name, at: place.at });
-    if (picked.length >= 14) break;
+function readShadowFillPreference(): boolean {
+  try {
+    return localStorage.getItem(SHADOW_FILL_KEY) === "1";
+  } catch {
+    return false;
   }
-  return picked;
 }
 
-function labelRank(name: string): number {
-  const key = name.toLowerCase();
-  if (key === "bonifacio high street") return 0;
-  if (key === "market! market!") return 1;
-  return 2;
+function persistShadowFill(visible: boolean): void {
+  try {
+    localStorage.setItem(SHADOW_FILL_KEY, visible ? "1" : "0");
+  } catch {
+    // Private mode can reject storage.
+  }
 }
 
-function labelNear(a: LngLat, b: LngLat): boolean {
-  const dx = (a[0] - b[0]) * Math.cos((14.55 * Math.PI) / 180);
-  const dy = a[1] - b[1];
-  return dx * dx + dy * dy < 0.0007 * 0.0007;
+function renderShadowToggle(onChange: (next: boolean) => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "shadeway-shadow-toggle";
+  button.addEventListener("click", () => {
+    const on = button.getAttribute("aria-pressed") === "true";
+    onChange(!on);
+  });
+  return button;
+}
+
+function paintShadowToggle(button: HTMLButtonElement, visible: boolean): void {
+  button.textContent = MAP_SHADOWS_LABEL;
+  button.setAttribute("aria-label", MAP_SHADOWS_LABEL);
+  button.setAttribute("aria-pressed", visible ? "true" : "false");
 }
 
 function overviewCamera(): CameraMove {
@@ -265,7 +298,7 @@ function sheetPadding(): { top: number; right: number; bottom: number; left: num
   if (!(sheet instanceof HTMLElement)) return { top: 72, right: 28, bottom: 120, left: 28 };
   const rect = sheet.getBoundingClientRect();
   const floating = rect.width < window.innerWidth - 48;
-  if (floating) return { top: 72, right: 28, bottom: 24, left: Math.round(rect.right + 16) };
+  if (floating) return { top: 72, right: 32, bottom: 24, left: 416 };
   return { top: 72, right: 28, bottom: Math.round(rect.height + 24), left: 28 };
 }
 
@@ -316,14 +349,18 @@ function showMissing(message: HTMLElement, error: unknown): void {
   message.append(title, hint);
 }
 
-function watchSheet(attribution: HTMLElement, onDetent: () => void): void {
+function watchSheet(attribution: HTMLElement, shadowToggle: HTMLElement, onDetent: () => void): void {
   const place = () => {
     const sheet = document.querySelector(".shadeway-sheet");
     const height = sheet instanceof HTMLElement ? sheet.getBoundingClientRect().height : 0;
     const floating = sheet instanceof HTMLElement && sheet.getBoundingClientRect().width < window.innerWidth - 48;
     const rect = sheet instanceof HTMLElement ? sheet.getBoundingClientRect() : null;
+    const wide = window.matchMedia("(min-width: 900px)").matches;
     attribution.style.bottom = floating || !rect ? "16px" : `${Math.round(height + 10)}px`;
     attribution.style.left = floating && rect ? `${Math.round(rect.right + 12)}px` : "10px";
+    shadowToggle.style.top = wide ? "calc(env(safe-area-inset-top, 0px) + 16px)" : "calc(env(safe-area-inset-top, 0px) + 8px)";
+    shadowToggle.style.right = "12px";
+    shadowToggle.style.left = "auto";
   };
   const seen = new WeakSet<HTMLElement>();
   const attach = () => {
@@ -428,21 +465,39 @@ const MAP_CSS = `
 }
 .shadeway-marker--start { background: #14202b; }
 .shadeway-marker--end { background: #0a84ff; }
-.shadeway-place-label {
-  font: 600 12px/1.2 system-ui, -apple-system, 'Segoe UI', sans-serif;
+.shadeway-shadow-toggle {
+  position: absolute;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
   color: #14202b;
-  white-space: nowrap;
-  pointer-events: none;
-  text-shadow: -1px 0 #fff, 1px 0 #fff, 0 -1px #fff, 0 1px #fff, 0 0 3px #fff;
+  box-shadow: 0 1px 4px rgba(20, 32, 43, 0.18);
+  font: 600 13px/1 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  cursor: pointer;
+}
+.shadeway-shadow-toggle[aria-pressed='true'] {
+  background: #0066cc;
+  color: #fff;
 }
 @media (prefers-color-scheme: dark) {
   .shadeway-attribution, .shadeway-map-message, .shadeway-attribution__full {
     background: rgba(28, 32, 38, 0.92);
     color: #f5f7fa;
   }
-  .shadeway-place-label {
+  .shadeway-shadow-toggle {
+    background: rgba(28, 32, 38, 0.92);
     color: #f5f7fa;
-    text-shadow: -1px 0 #14181d, 1px 0 #14181d, 0 -1px #14181d, 0 1px #14181d, 0 0 3px #14181d;
+  }
+  .shadeway-shadow-toggle[aria-pressed='true'] {
+    background: #409cff;
+    color: #0b1220;
   }
 }
 `;

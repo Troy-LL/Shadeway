@@ -35,12 +35,11 @@ try {
   await page.waitForSelector(".maplibregl-canvas", { timeout: 30_000 });
   await page.waitForFunction(() => window.__shadeway?.places?.length, null, { timeout: 60_000 });
   await page.evaluate((from) => window.__shadeway.pick(from), walk.from);
+  await page.waitForTimeout(300);
   await page.evaluate((to) => window.__shadeway.pick(to), walk.to);
   await page.waitForSelector(".route-card__sun", { timeout: 30_000 });
-  await page.locator(".time-scrubber__slider").evaluate((element) => {
-    element.value = "18";
-    element.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  await page.locator(".departure-chip").click();
+  await page.getByRole("option", { name: "15:00" }).click();
   await page.waitForTimeout(800);
   await mkdir(resolve(root, "screenshots"), { recursive: true });
   await page.screenshot({ path: resolve(root, "screenshots/compare.png") });

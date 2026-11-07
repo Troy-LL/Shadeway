@@ -7,18 +7,22 @@ setWorkerUrl(maplibreWorkerUrl);
 import type { RouteDraw, ShadowDraw } from "./scene";
 
 const SHADOW = [20, 32, 43, 46] as const;
-const SHADOW_DARK = [20, 32, 43, 32] as const;
-const EDGE = [20, 32, 43, 55] as const;
-const EDGE_DARK = [20, 32, 43, 40] as const;
-const EDGE_EST = [20, 32, 43, 90] as const;
-const EDGE_EST_DARK = [20, 32, 43, 70] as const;
+const SHADOW_DARK = [0, 0, 0, 77] as const;
+const EDGE = [20, 32, 43, 89] as const;
+const EDGE_DARK = [255, 255, 255, 64] as const;
+const EDGE_EST = [20, 32, 43, 89] as const;
+const EDGE_EST_DARK = [255, 255, 255, 64] as const;
 const SUN_LINE = [245, 165, 36, 255] as const;
 const SUN_LINE_DARK = [255, 184, 77, 255] as const;
 const SHADE_LINE = [31, 122, 140, 255] as const;
 const SHADE_LINE_DARK = [58, 160, 179, 255] as const;
-const CASING = [255, 255, 255, 235] as const;
-const TICK = [31, 122, 140, 255] as const;
-const ROUTE_INK = [20, 32, 43, 230] as const;
+const CASING_LIGHT = [20, 32, 43, 255] as const;
+const CASING_DARK = [255, 255, 255, 255] as const;
+const INACTIVE_LIGHT = [122, 131, 140, 255] as const;
+const INACTIVE_DARK = [107, 116, 126, 255] as const;
+const BUILDING_LIGHT = [228, 222, 211, 255] as const;
+const BUILDING_DARK = [34, 39, 46, 255] as const;
+const TICK = SHADE_LINE;
 
 export interface CameraMove {
   readonly pitch: number;
@@ -30,12 +34,14 @@ export interface CameraMove {
 export interface MapScene {
   readonly shadows: readonly ShadowDraw[];
   readonly route: RouteDraw;
+  readonly inactiveLine: readonly LngLat[];
+  readonly buildingFootprints: readonly (readonly LngLat[])[];
+  readonly showShadowFill: boolean;
 }
 
 export interface MapView {
   setRoads(roads: readonly (readonly LngLat[])[]): void;
   setLand(areas: readonly { kind: "park" | "water"; ring: readonly LngLat[] }[]): void;
-  setLabels(labels: readonly { name: string; at: LngLat }[]): void;
   setScene(scene: MapScene): void;
   ease(camera: CameraMove, durationMs: number): void;
   fit(
@@ -50,10 +56,11 @@ export interface MapView {
 }
 
 const SCENE_SOURCES = [
+  "buildings",
   "shadows",
   "shadow-edge",
   "shadow-edge-estimated",
-  "route-ink",
+  "route-inactive",
   "route-casing",
   "route-sun",
   "route-shade-casing",
@@ -126,10 +133,16 @@ export function createMapLibreView(root: HTMLElement): MapView {
       paint: { "line-color": "#0A84FF", "line-width": 2, "line-dasharray": [1.5, 1.2] },
     });
     map.addLayer({
+      id: "buildings",
+      type: "fill",
+      source: "buildings",
+      paint: { "fill-color": rgba(BUILDING_LIGHT), "fill-opacity": 1 },
+    });
+    map.addLayer({
       id: "shadows",
       type: "fill",
       source: "shadows",
-      paint: { "fill-color": rgba(SHADOW), "fill-opacity": 1 },
+      paint: { "fill-color": rgba(SHADOW), "fill-opacity": 0.18 },
     });
     map.addLayer({
       id: "shadow-edge",
@@ -144,18 +157,18 @@ export function createMapLibreView(root: HTMLElement): MapView {
       paint: { "line-color": rgba(EDGE_EST), "line-width": 1, "line-dasharray": [3, 2] },
     });
     map.addLayer({
-      id: "route-ink",
+      id: "route-inactive",
       type: "line",
-      source: "route-ink",
+      source: "route-inactive",
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": rgba(ROUTE_INK), "line-width": 14 },
+      paint: { "line-color": rgba(INACTIVE_LIGHT), "line-width": 4 },
     });
     map.addLayer({
       id: "route-casing",
       type: "line",
       source: "route-casing",
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": rgba(CASING), "line-width": 12 },
+      paint: { "line-color": rgba(CASING_LIGHT), "line-width": 11 },
     });
     map.addLayer({
       id: "route-sun",
@@ -169,7 +182,7 @@ export function createMapLibreView(root: HTMLElement): MapView {
       type: "line",
       source: "route-shade-casing",
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": rgba(CASING), "line-width": 7 },
+      paint: { "line-color": rgba(CASING_LIGHT), "line-width": 8 },
     });
     map.addLayer({
       id: "route-shade",
@@ -195,8 +208,6 @@ export function createMapLibreView(root: HTMLElement): MapView {
 
   let startMarker: Marker | null = null;
   let endMarker: Marker | null = null;
-  let labelMarkers: Marker[] = [];
-  let labelKey = "";
   let lastScene: MapScene | null = null;
   const theme = window.matchMedia("(prefers-color-scheme: dark)");
   const repaint = () => {
@@ -215,20 +226,6 @@ export function createMapLibreView(root: HTMLElement): MapView {
         if (isGeoJsonSource(parkSource)) parkSource.setData(ringsCollection(parks));
         const waterSource = map.getSource("water");
         if (isGeoJsonSource(waterSource)) waterSource.setData(ringsCollection(water));
-      });
-    },
-    setLabels(labels) {
-      const key = labels.map((label) => `${label.name}@${label.at[0]},${label.at[1]}`).join(";");
-      if (key === labelKey) return;
-      labelKey = key;
-      whenLoaded(() => {
-        for (const marker of labelMarkers) marker.remove();
-        labelMarkers = labels.map((label) => {
-          const element = document.createElement("div");
-          element.className = "shadeway-place-label";
-          element.textContent = label.name;
-          return new Marker({ element, anchor: "center" }).setLngLat([label.at[0], label.at[1]]).addTo(map);
-        });
       });
     },
     setRoads(roads) {
@@ -307,12 +304,18 @@ function applyScene(scene: MapScene): void {
   setSourceData(map, "shadows", ringsCollection(scene.shadows.map((shadow) => shadow.ring)));
   setSourceData(map, "shadow-edge", linesCollection(measured.map((shadow) => shadow.ring)));
   setSourceData(map, "shadow-edge-estimated", linesCollection(estimated.map((shadow) => shadow.ring)));
-  setSourceData(map, "route-ink", linesCollection(scene.route.sunny));
-  setSourceData(map, "route-casing", linesCollection(scene.route.sunny));
+  setSourceData(map, "buildings", ringsCollection(scene.buildingFootprints));
+  const inactive =
+    scene.inactiveLine.length >= 2 ? linesCollection([scene.inactiveLine]) : emptyCollection();
+  setSourceData(map, "route-inactive", inactive);
+  setSourceData(map, "route-casing", linesCollection([...scene.route.sunny, ...scene.route.shaded]));
   setSourceData(map, "route-sun", linesCollection(scene.route.sunny));
   setSourceData(map, "route-shade-casing", linesCollection(scene.route.shaded));
   setSourceData(map, "route-shade", linesCollection(scene.route.shaded));
   setSourceData(map, "route-ticks", linesCollection(scene.route.ticks));
+  if (map.getLayer("shadows")) {
+    map.setLayoutProperty("shadows", "visibility", scene.showShadowFill ? "visible" : "none");
+  }
 }
 
 type GeoJsonData = ReturnType<typeof ringsCollection> | ReturnType<typeof linesCollection> | ReturnType<typeof emptyCollection>;
@@ -331,6 +334,9 @@ function palette() {
     edgeEst: dark ? EDGE_EST_DARK : EDGE_EST,
     sun: dark ? SUN_LINE_DARK : SUN_LINE,
     shade: dark ? SHADE_LINE_DARK : SHADE_LINE,
+    building: dark ? BUILDING_DARK : BUILDING_LIGHT,
+    casing: dark ? CASING_DARK : CASING_LIGHT,
+    inactive: dark ? INACTIVE_DARK : INACTIVE_LIGHT,
     land: dark ? "#14181d" : "#F3EFE8",
     park: dark ? "#243028" : "#D5E4CF",
     water: dark ? "#1C3344" : "#C5D8EA",
@@ -354,9 +360,16 @@ function paintSceneColors(): void {
   const colors = palette();
   const map = baseMap;
   if (!map) return;
-  if (map.getLayer("shadows")) map.setPaintProperty("shadows", "fill-color", rgba(colors.shadow));
+  if (map.getLayer("buildings")) map.setPaintProperty("buildings", "fill-color", rgba(colors.building));
+  if (map.getLayer("shadows")) {
+    map.setPaintProperty("shadows", "fill-color", rgba(colors.shadow));
+    map.setPaintProperty("shadows", "fill-opacity", colors.dark ? 0.3 : 0.18);
+  }
   if (map.getLayer("shadow-edge")) map.setPaintProperty("shadow-edge", "line-color", rgba(colors.edge));
   if (map.getLayer("shadow-edge-estimated")) map.setPaintProperty("shadow-edge-estimated", "line-color", rgba(colors.edgeEst));
+  if (map.getLayer("route-inactive")) map.setPaintProperty("route-inactive", "line-color", rgba(colors.inactive));
+  if (map.getLayer("route-casing")) map.setPaintProperty("route-casing", "line-color", rgba(colors.casing));
+  if (map.getLayer("route-shade-casing")) map.setPaintProperty("route-shade-casing", "line-color", rgba(colors.casing));
   if (map.getLayer("route-sun")) map.setPaintProperty("route-sun", "line-color", rgba(colors.sun));
   if (map.getLayer("route-shade")) map.setPaintProperty("route-shade", "line-color", rgba(colors.shade));
   if (map.getLayer("route-ticks")) map.setPaintProperty("route-ticks", "line-color", rgba(colors.shade));

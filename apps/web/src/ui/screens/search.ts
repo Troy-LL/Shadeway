@@ -1,20 +1,18 @@
-import { COPY, PILOT_DESTINATIONS } from "../copy";
-import { renderTimeScrubber } from "../time-scrubber";
-import type { PlacePick, UiState } from "../types";
+import { COPY } from "../copy";
+import type { FieldFocus, PlacePick, UiState } from "../types";
 import { renderStatusBlock } from "./status";
 
 export interface SearchHandlers {
-  readonly onQuery: (query: string) => void;
+  readonly onFocusField: (field: FieldFocus) => void;
+  readonly onFromQuery: (query: string) => void;
+  readonly onToQuery: (query: string) => void;
   readonly onPick: (place: PlacePick) => void;
-  readonly onDestination: (label: string) => void;
-  readonly onLeaveNow: () => void;
-  readonly onSlotChange: (slot: number) => void;
-  readonly onSnapNow: () => void;
+  readonly onSwap: () => void;
 }
 
 const PILOT_RANK = new Map<string, number>([
-  [PILOT_DESTINATIONS.bonifacioHighStreet.toLowerCase(), 0],
-  [PILOT_DESTINATIONS.marketMarket.toLowerCase(), 1],
+  ["bonifacio high street", 0],
+  ["market! market!", 1],
 ]);
 
 export function matchPlaces(places: readonly PlacePick[], query: string): readonly PlacePick[] {
@@ -23,7 +21,7 @@ export function matchPlaces(places: readonly PlacePick[], query: string): readon
   return places
     .filter((place) => place.name.toLowerCase().includes(needle))
     .sort((a, b) => rankPlace(a.name) - rankPlace(b.name) || a.name.localeCompare(b.name))
-    .slice(0, 6);
+    .slice(0, 3);
 }
 
 function rankPlace(name: string): number {
@@ -41,30 +39,49 @@ export function renderSearchContent(state: UiState, handlers: SearchHandlers): H
   }
   if (status) container.append(status);
 
-  if (state.start) {
-    const from = document.createElement("p");
-    from.className = "search-picked";
-    from.textContent = state.start.name;
-    container.append(from);
-  }
+  const row = document.createElement("div");
+  row.className = "search-fields";
 
-  const field = document.createElement("input");
-  field.className = "search-field";
-  field.type = "search";
-  field.placeholder = COPY.whereTo;
-  field.setAttribute("aria-label", COPY.whereTo);
-  field.value = state.query;
-  field.addEventListener("input", () => handlers.onQuery(field.value));
-  field.addEventListener("keydown", (event) => {
+  const from = document.createElement("input");
+  from.className = "search-field";
+  from.type = "search";
+  from.placeholder = state.locationDenied ? COPY.locationOff : COPY.from;
+  from.setAttribute("aria-label", COPY.from);
+  from.value = state.start?.name ?? state.fromQuery;
+  from.disabled = state.locationDenied;
+  if (state.focusedField === "from") from.classList.add("search-field--active");
+  from.addEventListener("focus", () => handlers.onFocusField("from"));
+  from.addEventListener("input", () => handlers.onFromQuery(from.value));
+
+  const swap = document.createElement("button");
+  swap.type = "button";
+  swap.className = "search-swap";
+  swap.setAttribute("aria-label", COPY.swap);
+  swap.textContent = "⇅";
+  swap.addEventListener("click", handlers.onSwap);
+
+  const to = document.createElement("input");
+  to.className = "search-field";
+  to.type = "search";
+  to.placeholder = COPY.whereTo;
+  to.setAttribute("aria-label", COPY.to);
+  to.value = state.end?.name ?? state.toQuery;
+  if (state.focusedField === "to") to.classList.add("search-field--active");
+  to.addEventListener("focus", () => handlers.onFocusField("to"));
+  to.addEventListener("input", () => handlers.onToQuery(to.value));
+  to.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
-    const first = matchPlaces(state.places, field.value)[0];
+    const first = matchPlaces(state.places, to.value)[0];
     if (!first) return;
     event.preventDefault();
     handlers.onPick(first);
   });
-  container.append(field);
 
-  const matches = matchPlaces(state.places, state.query);
+  row.append(from, swap, to);
+  container.append(row);
+
+  const query = state.focusedField === "from" ? state.fromQuery : state.toQuery;
+  const matches = state.editingField ? matchPlaces(state.places, query) : [];
   if (matches.length > 0) {
     const list = document.createElement("div");
     list.className = "suggest";
@@ -78,62 +95,17 @@ export function renderSearchContent(state: UiState, handlers: SearchHandlers): H
       list.append(option);
     }
     container.append(list);
+  } else if (state.editingField && query.trim()) {
+    const empty = document.createElement("p");
+    empty.className = "status-message status-message--secondary";
+    empty.textContent = COPY.noMatchingPlace;
+    container.append(empty);
   }
 
-  const chips = document.createElement("div");
-  chips.className = "chip-row";
-  for (const label of [PILOT_DESTINATIONS.bonifacioHighStreet, PILOT_DESTINATIONS.marketMarket]) {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "chip";
-    chip.textContent = label;
-    chip.addEventListener("click", () => handlers.onDestination(label));
-    chips.append(chip);
-  }
-  container.append(chips);
-
-  if (state.detent === "full") {
-    const extra = document.createElement("div");
-    extra.className = "chip-row";
-    const leaveNow = document.createElement("button");
-    leaveNow.type = "button";
-    leaveNow.className = "chip";
-    leaveNow.textContent = COPY.leaveNow;
-    leaveNow.setAttribute("data-action", "leave-now");
-    leaveNow.addEventListener("click", handlers.onLeaveNow);
-    extra.append(leaveNow);
-    container.append(extra);
-
-    if (state.timePickerOpen) {
-      container.append(
-        renderTimeScrubber({
-          slot: state.slot,
-          departureIsNow: state.departureIsNow,
-          onSlotChange: handlers.onSlotChange,
-          onSnapNow: handlers.onSnapNow,
-        }),
-      );
-    }
-
-    if (state.recents.length > 0) {
-      const recents = document.createElement("div");
-      recents.className = "recents";
-      const title = document.createElement("p");
-      title.className = "recents__title sr-only";
-      title.textContent = "Recents";
-      const list = document.createElement("div");
-      list.className = "chip-row";
-      for (const recent of state.recents) {
-        const chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = "chip";
-        chip.textContent = recent;
-        chip.addEventListener("click", () => handlers.onDestination(recent));
-        list.append(chip);
-      }
-      recents.append(title, list);
-      container.append(recents);
-    }
+  if (state.status === "loading-tiles") {
+    const shimmer = document.createElement("div");
+    shimmer.className = "shimmer-row";
+    container.append(shimmer);
   }
 
   return container;

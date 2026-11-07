@@ -5,6 +5,7 @@ export type { MapController, RouteGeometry } from "../map/controller";
 export function createNoopMapController(): MapController {
   return {
     setRoute() {},
+    setAlternateRoute() {},
     setSlot() {},
     fitRoute() {},
     followPosition() {},

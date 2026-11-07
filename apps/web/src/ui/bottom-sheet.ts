@@ -1,6 +1,6 @@
 import type { SheetDetent } from "./types";
 
-const DETENT_ORDER: readonly SheetDetent[] = ["peek", "half", "full"];
+const DETENT_ORDER: readonly SheetDetent[] = ["peek", "half"];
 
 export function nextDetent(current: SheetDetent, direction: "up" | "down"): SheetDetent {
   const index = DETENT_ORDER.indexOf(current);

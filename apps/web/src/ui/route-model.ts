@@ -16,7 +16,7 @@ import { shadeModel } from "@shadeway/shade-model";
 import { COPY } from "./copy";
 import type { RouteCardModel, ShadeSegment } from "./types";
 
-const CARD_ORDER: readonly RouteWeight[] = ["fastest", "balanced", "shadiest"];
+const CARD_ORDER: readonly RouteWeight[] = ["shadiest", "fastest"];
 
 export function cardsFromResults(
   routes: Readonly<Record<RouteWeight, RouteResult | null>>,
@@ -25,6 +25,9 @@ export function cardsFromResults(
 ): RouteCardModel[] {
   const fastest = routes.fastest;
   const shadiest = routes.shadiest;
+  const sunDown =
+    fastest?.geometry[0] !== undefined &&
+    shadeModel.sunPosition(fastest.departure, fastest.geometry[0]).elevationDeg <= 0;
   const same =
     fastest !== null &&
     shadiest !== null &&
@@ -37,14 +40,29 @@ export function cardsFromResults(
     const card: RouteCardModel = {
       weight,
       totalMinutes: Math.round(result.durationS / 60),
-      sunMinutes: Math.round(result.sunSeconds / 60),
+      sunMinutes: sunDown ? 0 : Math.round(result.sunSeconds / 60),
       segments: segmentsForRoute(graph, tiles, result),
       confidence: "Estimate",
       geometry: result.geometry,
       distanceM: result.distanceM,
       edgeKey: result.edgeIds.join(","),
+      shadeUnavailable: sunDown && weight === "fastest",
     };
-    cards.push(weight === "shadiest" && same ? { ...card, note: COPY.sameRouteAsFastest } : card);
+    cards.push(card);
+  }
+  return noteCards(cards, same);
+}
+
+export function compareRoutes(cards: readonly RouteCardModel[]): readonly RouteCardModel[] {
+  return cards.filter((card) => card.weight === "shadiest" || card.weight === "fastest");
+}
+
+function noteCards(cards: RouteCardModel[], same: boolean): RouteCardModel[] {
+  if (cards.length === 1) {
+    return cards.map((card) => ({ ...card, note: COPY.availableRoute }));
+  }
+  if (same && cards.length >= 2) {
+    return cards.map((card) => (card.weight === "shadiest" ? { ...card, note: COPY.shadiestAndFastest } : card));
   }
   return cards;
 }

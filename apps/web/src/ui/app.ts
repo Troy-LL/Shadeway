@@ -1,18 +1,17 @@
-import { isSlotIndex, slotStartMinutes, type LngLat, type SlotIndex } from "@shadeway/contract";
+import { isSlotIndex, slotStartMinutes, type LngLat } from "@shadeway/contract";
 import { shadeModel } from "@shadeway/shade-model";
 import { MAP_SUN_DATE, type MapController } from "../map/controller";
 import type { PilotData } from "../map/pilot";
 import { attachSheetKeyboard } from "./bottom-sheet";
-import { COPY, formatMinutes, formatMinutesInSun } from "./copy";
+import { COPY } from "./copy";
 import { createNoopMapController } from "./controller-stub";
 import { createRouteClient, nearestNode, type RouteClient } from "./route-client";
-import { slotAfterElapsed, walkRemaining } from "./progress";
+import { manilaNowMinutes, shadeDepartureAvailable, snapToNowSlot } from "./departure-time";
 import { cardsFromResults } from "./route-model";
 import { moveRouteSelection, renderCompareContent } from "./screens/compare";
-import { renderInRouteBanner, renderInRouteContent } from "./screens/in-route";
+import { renderInRouteContent } from "./screens/in-route";
 import { renderSearchContent } from "./screens/search";
 import { segmentsForSlot } from "./slot-segments";
-import { manilaNowMinutes, snapToNowSlot } from "./time-scrubber";
 import type { PlacePick, RouteCardModel, UiState } from "./types";
 import { UI_STYLES } from "./styles";
 
@@ -24,18 +23,20 @@ function applySegmentsForSlot(routes: readonly RouteCardModel[], slot: UiState["
 function emptyUiState(): UiState {
   return {
     screen: "search",
-    detent: "peek",
+    detent: "half",
     status: "normal",
     selectedWeight: "shadiest",
     slot: 12,
     departureIsNow: true,
     routes: [],
     locationDenied: false,
-    minutesRemaining: 0,
-    sunMinutesRemaining: 0,
-    offRoute: false,
-    navigationLine: "",
-    recents: [],
+    tripMinutes: 0,
+    tripSunMinutes: 0,
+    tripDistanceM: 0,
+    fromQuery: "",
+    toQuery: "",
+    focusedField: "to",
+    editingField: false,
     query: "",
     places: [],
     start: null,
@@ -57,10 +58,6 @@ export function createUiApp(
   let routeClient: RouteClient | null = null;
   let routeGeneration = 0;
   let framed = "";
-  let offPoint: LngLat | null = null;
-  let walkTimer = 0;
-  let walkStarted = 0;
-  let walkBase: { durationS: number; distanceM: number; sunMinutes: number; slot: SlotIndex } | null = null;
 
   const shell = document.createElement("div");
   shell.className = "shadeway-ui";
@@ -69,7 +66,6 @@ export function createUiApp(
   style.textContent = UI_STYLES;
   shell.append(style);
 
-  const bannerHost = document.createElement("div");
   const sheet = document.createElement("section");
   sheet.className = "shadeway-sheet";
   sheet.setAttribute("aria-label", "Shadeway");
@@ -77,7 +73,7 @@ export function createUiApp(
   const grabber = document.createElement("button");
   grabber.type = "button";
   grabber.className = "sheet-grabber";
-  grabber.setAttribute("aria-label", "Sheet");
+  grabber.setAttribute("aria-label", COPY.expandSheet);
   const pill = document.createElement("span");
   pill.className = "sheet-grabber__pill";
   grabber.append(pill);
@@ -86,52 +82,45 @@ export function createUiApp(
   body.className = "sheet-body";
 
   sheet.append(grabber, body);
-  shell.append(bannerHost, sheet);
+  shell.append(sheet);
   root.append(shell);
 
   const syncMap = () => {
     map.setSlot(state.slot);
     const selected = state.routes.find((route) => route.weight === state.selectedWeight);
-    if (selected && (state.screen === "compare" || state.screen === "in-route") && selected.geometry.length >= 2) {
+    const alternate = state.routes.find((route) => route.weight !== state.selectedWeight);
+    const showRoutes = state.screen === "compare" || state.screen === "in-route";
+    if (showRoutes && selected && selected.geometry.length >= 2) {
       map.setRoute({ weight: selected.weight, coordinates: selected.geometry });
+      if (state.screen === "compare" && alternate && alternate.geometry.length >= 2) {
+        map.setAlternateRoute({ weight: alternate.weight, coordinates: alternate.geometry });
+      } else {
+        map.setAlternateRoute(null);
+      }
       const key = `${selected.weight}:${selected.edgeKey}`;
       if (state.screen === "compare" && framed !== key) {
         framed = key;
         map.fitRoute();
       }
+    } else if (selected && selected.geometry.length >= 2) {
+      map.setRoute({ weight: selected.weight, coordinates: selected.geometry });
+      map.setAlternateRoute(null);
     }
-    map.followPosition(state.screen === "in-route");
+    map.followPosition(false);
   };
 
   const render = () => {
     sheet.dataset.detent = state.detent;
     sheet.dataset.screen = state.screen;
-    bannerHost.replaceChildren();
+    sheet.dataset.editing = state.editingField ? "true" : "false";
+    grabber.setAttribute("aria-label", state.detent === "peek" ? COPY.expandSheet : COPY.collapseSheet);
     body.replaceChildren();
 
     if (state.screen === "in-route") {
-      bannerHost.append(
-        renderInRouteBanner(state, {
-          onEnd: endTrip,
-          onReroute: () => {
-            if (live && state.start && state.end && offPoint) {
-              void routeBetween(state.start, state.end, offPoint);
-              return;
-            }
-            setState({ offRoute: false });
-          },
-        }),
-      );
       body.append(
         renderInRouteContent(state, {
-          onEnd: endTrip,
-          onReroute: () => {
-            if (live && state.start && state.end && offPoint) {
-              void routeBetween(state.start, state.end, offPoint);
-              return;
-            }
-            setState({ offRoute: false });
-          },
+          onEnd: endToCompare,
+          onShowRoute: () => map.fitRoute(),
         }),
       );
       return;
@@ -144,34 +133,36 @@ export function createUiApp(
           onSlotChange: (slot) => {
             if (!isSlotIndex(slot)) return;
             if (!live) {
-              setState({ slot, departureIsNow: false, routes: applySegmentsForSlot(state.routes, slot) });
+              setState({ slot, departureIsNow: false, routes: applySegmentsForSlot(state.routes, slot), timePickerOpen: false });
               return;
             }
-            setState({ slot, departureIsNow: false });
+            setState({ slot, departureIsNow: false, timePickerOpen: false });
             if (state.start && state.end) void routeBetween(state.start, state.end);
           },
-          onSnapNow: () => {
+          onPickNow: () => {
             const nowSlot = snapToNowSlot(live ? manilaNowMinutes() : 12 * 60);
             if (!live) {
               setState({
                 slot: nowSlot,
                 departureIsNow: true,
                 routes: applySegmentsForSlot(state.routes, nowSlot),
+                timePickerOpen: false,
               });
               return;
             }
-            setState({ slot: nowSlot, departureIsNow: true });
+            setState({ slot: nowSlot, departureIsNow: true, timePickerOpen: false });
             if (state.start && state.end) void routeBetween(state.start, state.end);
           },
+          onToggleTimePicker: () => setState({ timePickerOpen: !state.timePickerOpen }),
           onStart: () => {
             const selected = state.routes.find((route) => route.weight === state.selectedWeight);
-            if (live && selected) beginWalk(selected, state.slot);
             setState({
               screen: "in-route",
-              detent: "peek",
-              minutesRemaining: selected?.totalMinutes ?? state.minutesRemaining,
-              sunMinutesRemaining: selected?.sunMinutes ?? state.sunMinutesRemaining,
-              navigationLine: selected ? lineFor(state.end?.name ?? "", selected.distanceM) : state.navigationLine,
+              detent: "half",
+              tripMinutes: selected?.totalMinutes ?? 0,
+              tripSunMinutes: selected?.sunMinutes ?? 0,
+              tripDistanceM: selected?.distanceM ?? 0,
+              timePickerOpen: false,
             });
           },
           onTryAgain: () => {
@@ -181,6 +172,15 @@ export function createUiApp(
             }
             setState({ status: "normal" });
           },
+          onBack: () =>
+            setState({
+              screen: "search",
+              detent: "half",
+              editingField: true,
+              focusedField: "to",
+              toQuery: state.end?.name ?? "",
+              fromQuery: state.start?.name ?? "",
+            }),
         }),
       );
       return;
@@ -188,36 +188,28 @@ export function createUiApp(
 
     body.append(
       renderSearchContent(state, {
-        onQuery: (query) => setState({ query }),
-        onPick: (place) => {
-          if (live) choose(place);
-        },
-        onDestination: (label) => {
-          if (!live) {
-            setState({ screen: "compare", detent: "half" });
-            map.setEndMarker([121.05, 14.55]);
-            return;
-          }
-          const place = state.places.find((item) => item.name.toLowerCase() === label.trim().toLowerCase());
-          if (place) choose(place);
-        },
-        onLeaveNow: () =>
+        onFocusField: (field) => setState({ focusedField: field, editingField: true, detent: "half" }),
+        onFromQuery: (query) => setState({ fromQuery: query, query, focusedField: "from", editingField: true }),
+        onToQuery: (query) => setState({ toQuery: query, query, focusedField: "to", editingField: true }),
+        onSwap: () => {
+          if (!state.start && !state.end) return;
+          map.setStartMarker(state.end?.at ?? null);
+          map.setEndMarker(state.start?.at ?? null);
           setState({
-            timePickerOpen: !state.timePickerOpen,
-            departureIsNow: true,
-            slot: snapToNowSlot(manilaNowMinutes()),
-          }),
-        onSlotChange: (slot) => {
-          if (!isSlotIndex(slot)) return;
-          setState({ slot, departureIsNow: false });
+            start: state.end,
+            end: state.start,
+            fromQuery: state.end?.name ?? "",
+            toQuery: state.start?.name ?? "",
+          });
         },
-        onSnapNow: () => setState({ slot: snapToNowSlot(manilaNowMinutes()), departureIsNow: true }),
+        onPick: (place) => {
+          if (live) pickPlace(place);
+        },
       }),
     );
   };
 
   const setState = (patch: Partial<UiState>) => {
-    if (state.screen === "in-route" && patch.screen !== undefined && patch.screen !== "in-route") stopWalk();
     let next: UiState = { ...state, ...patch };
     if (!live && patch.slot !== undefined && isSlotIndex(patch.slot) && patch.routes === undefined) {
       next = { ...next, routes: applySegmentsForSlot(next.routes, patch.slot) };
@@ -230,73 +222,12 @@ export function createUiApp(
     }
   };
 
-  function endTrip(): void {
-    map.setStartMarker(null);
-    map.setEndMarker(null);
-    map.setPilotBox(false);
+  function endToCompare(): void {
     setState({
-      screen: "search",
-      detent: "peek",
-      offRoute: false,
-      start: null,
-      end: null,
-      status: "normal",
-      routes: [],
+      screen: "compare",
+      detent: "half",
+      timePickerOpen: false,
     });
-  }
-
-  function beginWalk(card: RouteCardModel, slot: SlotIndex): void {
-    stopWalk();
-    walkBase = {
-      durationS: Math.max(card.totalMinutes, 1) * 60,
-      distanceM: card.distanceM,
-      sunMinutes: card.sunMinutes,
-      slot,
-    };
-    walkStarted = performance.now();
-    map.setFollowFraction(0);
-    walkTimer = window.setInterval(tickWalk, 1000);
-  }
-
-  function stopWalk(): void {
-    if (walkTimer) window.clearInterval(walkTimer);
-    walkTimer = 0;
-    walkBase = null;
-  }
-
-  function tickWalk(): void {
-    const base = walkBase;
-    if (!base || state.screen !== "in-route" || state.offRoute) return;
-    const elapsedS = (performance.now() - walkStarted) / 1000;
-    const left = walkRemaining(elapsedS, base.durationS, base.distanceM, base.sunMinutes);
-    const slot = slotAfterElapsed(base.slot, elapsedS);
-    const line = lineFor("", left.distanceM);
-    map.setFollowFraction(left.fraction);
-    const banner = bannerHost.querySelector(".in-route-banner");
-    const minutesEl = body.querySelector(".in-route-screen p:not(.in-route-sheet__sun):not(.in-route-sheet__label)");
-    const sunEl = body.querySelector(".in-route-sheet__sun");
-    const previous = state.slot;
-    state = {
-      ...state,
-      minutesRemaining: left.minutes,
-      sunMinutesRemaining: left.sunMinutes,
-      navigationLine: line,
-      slot,
-    };
-    if (banner && minutesEl && sunEl) {
-      banner.textContent = line;
-      minutesEl.textContent = formatMinutes(left.minutes);
-      sunEl.textContent = formatMinutesInSun(left.sunMinutes);
-      if (slot !== previous) map.setSlot(slot);
-      return;
-    }
-    render();
-    syncMap();
-  }
-
-  function lineFor(name: string, distanceM: number): string {
-    void name;
-    return `${COPY.keepGoing} · ${Math.round(distanceM)} m`;
   }
 
   function inside(pilot: PilotData, point: LngLat): boolean {
@@ -304,31 +235,40 @@ export function createUiApp(
     return point[0] >= west && point[0] <= east && point[1] >= south && point[1] <= north;
   }
 
-  function choose(place: PlacePick): void {
+  function pickPlace(place: PlacePick): void {
     const pilot = livePilot;
     if (!pilot) return;
     if (!inside(pilot, place.at)) {
       map.setPilotBox(true);
-      setState({ status: "outside-pilot", screen: "search", detent: "half" });
+      setState({ status: "outside-pilot", screen: "search", detent: "half", editingField: false });
       return;
     }
     map.setPilotBox(false);
-    if (!state.start) {
+    const field = state.focusedField;
+    if (field === "from" || !state.start) {
       map.setStartMarker(place.at);
-      setState({ start: place, query: "", status: "normal", screen: "search", detent: "half" });
+      setState({
+        start: place,
+        fromQuery: place.name,
+        editingField: true,
+        focusedField: "to",
+        toQuery: "",
+        status: "normal",
+        screen: "search",
+        detent: "half",
+      });
       return;
     }
     map.setEndMarker(place.at);
-    const loading = state.routes.length === 0;
-    const start = state.start;
     setState({
       end: place,
-      query: "",
+      toQuery: place.name,
+      editingField: false,
       screen: "compare",
       detent: "half",
-      status: loading ? "loading-tiles" : "normal",
+      status: state.routes.length === 0 ? "loading-tiles" : "normal",
     });
-    void routeBetween(start, place);
+    void routeBetween(state.start, place);
   }
 
   async function routeBetween(start: PlacePick, end: PlacePick, from?: LngLat): Promise<void> {
@@ -356,24 +296,23 @@ export function createUiApp(
         return;
       }
       const sun = shadeModel.sunPosition(departure, origin);
-      const night = sun.elevationDeg <= 0;
-      const selectedWeight = night ? "fastest" : state.status === "night" ? "shadiest" : state.selectedWeight;
+      const sunDown = sun.elevationDeg <= 0;
+      const outsideHours = state.departureIsNow && !shadeDepartureAvailable(manilaNowMinutes());
+      const shadeUnavailable = sunDown || outsideHours;
+      const selectedWeight = shadeUnavailable ? "fastest" : state.selectedWeight;
       const picked = cards.find((card) => card.weight === selectedWeight) ?? cards[0];
       if (!picked) return;
       const screen = state.screen === "in-route" ? "in-route" : "compare";
       setState({
-        status: night ? "night" : "normal",
+        status: shadeUnavailable ? "shade-unavailable" : "normal",
         routes: cards,
         selectedWeight: picked.weight,
         screen,
-        detent: screen === "in-route" ? state.detent : "half",
-        minutesRemaining: picked.totalMinutes,
-        sunMinutesRemaining: picked.sunMinutes,
-        navigationLine: lineFor(end.name, picked.distanceM),
-        offRoute: false,
-        recents: [end.name, ...state.recents.filter((name) => name !== end.name)].slice(0, 4),
+        detent: "half",
+        tripMinutes: picked.totalMinutes,
+        tripSunMinutes: picked.sunMinutes,
+        tripDistanceM: picked.distanceM,
       });
-      if (screen === "in-route") beginWalk(picked, slot);
       document.documentElement.dataset.route = "ready";
     } catch {
       if (generation !== routeGeneration) return;
@@ -381,7 +320,7 @@ export function createUiApp(
     }
   }
 
-  attachSheetKeyboard(grabber, () => state.detent, (detent) => setState({ detent }));
+  attachSheetKeyboard(grabber, () => state.detent, (detent) => setState({ detent, editingField: detent === "half" }));
 
   body.addEventListener("keydown", (event) => {
     if (state.screen !== "compare") return;
@@ -402,10 +341,8 @@ export function createUiApp(
   });
 
   grabber.addEventListener("click", () => {
-    const order: UiState["detent"][] = ["peek", "half", "full"];
-    const index = order.indexOf(state.detent);
-    const next = order[(index + 1) % order.length];
-    if (next) setState({ detent: next });
+    const next = state.detent === "peek" ? "half" : "peek";
+    setState({ detent: next, editingField: next === "half" && state.screen === "search" });
   });
 
   render();
@@ -432,7 +369,7 @@ export function createUiApp(
         window.__shadeway = {
           places: pilot.places,
           pick(at) {
-            choose({ name: `${at[1].toFixed(5)}, ${at[0].toFixed(5)}`, at: [at[0], at[1]] });
+            pickPlace({ name: `${at[1].toFixed(5)}, ${at[0].toFixed(5)}`, at: [at[0], at[1]] });
           },
           route(from, to, minutes) {
             const client = routeClient;
@@ -445,12 +382,8 @@ export function createUiApp(
         };
       }
       map.subscribeMapTap((position) => {
-        if (state.screen === "in-route") {
-          offPoint = position;
-          setState({ offRoute: true });
-          return;
-        }
-        choose({ name: `${position[1].toFixed(5)}, ${position[0].toFixed(5)}`, at: position });
+        if (state.screen === "in-route") return;
+        pickPlace({ name: `${position[1].toFixed(5)}, ${position[0].toFixed(5)}`, at: position });
       });
     });
   }
