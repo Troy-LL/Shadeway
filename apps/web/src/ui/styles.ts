@@ -98,7 +98,29 @@ export const UI_STYLES = `
 }
 
 .shadeway-sheet[data-screen='search'][data-detent='half'] {
-  height: calc(164px + var(--safe-bottom));
+  height: calc(176px + var(--safe-bottom));
+}
+
+.shadeway-sheet[data-screen='search'] .sheet-body {
+  gap: 0;
+  padding-bottom: var(--space-2);
+}
+
+.shadeway-sheet[data-screen='search'] .search-screen {
+  gap: 0;
+}
+
+.shadeway-sheet[data-screen='search'] .search-fields__stack {
+  gap: 0;
+}
+
+.shadeway-sheet[data-screen='compare'] .sheet-body,
+.shadeway-sheet[data-screen='in-route'] .sheet-body {
+  padding-bottom: 0;
+}
+
+.shadeway-sheet[data-editing='true'] {
+  bottom: var(--sheet-keyboard-offset, 0px);
 }
 
 .shadeway-sheet[data-screen='search'][data-editing='true'] {
@@ -107,12 +129,12 @@ export const UI_STYLES = `
 }
 
 .shadeway-sheet[data-screen='compare'] {
-  height: min(62dvh, calc(420px + var(--safe-bottom)));
+  height: min(62dvh, 420px);
 }
 
 .shadeway-sheet[data-screen='in-route'] {
-  height: calc(268px + var(--safe-bottom));
-  max-height: calc(268px + var(--safe-bottom));
+  height: auto;
+  max-height: min(62dvh, calc(100dvh - var(--safe-top) - 48px));
 }
 
 .sheet-grabber {
@@ -196,6 +218,7 @@ export const UI_STYLES = `
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  padding-bottom: calc(16px + var(--safe-bottom));
 }
 
 .search-fields {
@@ -325,14 +348,20 @@ export const UI_STYLES = `
 
 .route-card {
   position: relative;
+  box-sizing: border-box;
   border-radius: var(--radius-card);
   border: 2px solid var(--color-border);
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   background: var(--color-surface);
   min-height: 88px;
+  height: 88px;
   text-align: left;
   width: 100%;
   cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .route-card[aria-checked='true'] {
@@ -343,7 +372,8 @@ export const UI_STYLES = `
   font-size: var(--text-28);
   font-weight: 600;
   color: var(--color-ink);
-  margin: 0 0 var(--space-1);
+  margin: 0;
+  line-height: 1.05;
 }
 
 .route-card__sun--muted {
@@ -355,19 +385,21 @@ export const UI_STYLES = `
 .route-card__title {
   font-size: var(--text-15);
   font-weight: 600;
-  margin: 0 0 var(--space-1);
+  margin: 0;
 }
 
 .route-card__meta {
   font-size: var(--text-15);
   color: var(--color-text-secondary);
   margin: 0;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .route-card__note {
-  margin: 0 0 var(--space-1);
-  font-size: var(--text-15);
-  color: var(--color-text);
+  display: none;
 }
 
 .route-card__check {
@@ -392,7 +424,8 @@ export const UI_STYLES = `
   height: 8px;
   border-radius: 6px;
   overflow: hidden;
-  margin-top: var(--space-2);
+  margin-top: auto;
+  flex-shrink: 0;
 }
 
 .shade-strip__shade {
@@ -435,10 +468,20 @@ export const UI_STYLES = `
   font-size: var(--text-15);
 }
 
+.in-route-screen {
+  padding-bottom: calc(16px + var(--safe-bottom));
+}
+
 .in-route-screen__status {
   margin: 0;
   font-size: var(--text-15);
   color: var(--color-text-secondary);
+}
+
+@media (min-width: 900px) {
+  .in-route-screen__status {
+    white-space: nowrap;
+  }
 }
 
 .in-route-screen__sun {

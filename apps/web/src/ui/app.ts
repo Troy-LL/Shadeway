@@ -1,8 +1,10 @@
-import { isSlotIndex, slotStartMinutes, type LngLat } from "@shadeway/contract";
+import { isSlotIndex, slotStartMinutes, type LngLat, type RouteWeight } from "@shadeway/contract";
 import { shadeModel } from "@shadeway/shade-model";
 import { MAP_SUN_DATE, type MapController } from "../map/controller";
 import type { PilotData } from "../map/pilot";
 import { attachSheetKeyboard } from "./bottom-sheet";
+import { placePickField } from "./pick-place";
+import { focusSelectedRouteCard } from "./route-card-focus";
 import { bindVisualViewport } from "./viewport-sheet";
 import { COPY } from "./copy";
 import { createNoopMapController } from "./controller-stub";
@@ -118,14 +120,27 @@ export function createUiApp(
     map.followPosition(false);
     if (state.screen === "compare" && state.start && state.end) {
       const labels: { text: string; at: LngLat }[] = [];
-      const tag = `${state.start.name} → ${state.end.name}`;
+      const labelForWeight = (weight: RouteWeight) => {
+        switch (weight) {
+          case "shadiest":
+            return COPY.shadiest;
+          case "fastest":
+            return COPY.fastest;
+          case "balanced":
+            return "Balanced";
+          default: {
+            const _exhaustive: never = weight;
+            return String(_exhaustive);
+          }
+        }
+      };
       if (selected?.geometry.length) {
         const at = routeMidpoint(selected.geometry);
-        if (at) labels.push({ text: tag, at });
+        if (at) labels.push({ text: labelForWeight(selected.weight), at });
       }
       if (alternate?.geometry.length) {
         const at = routeMidpoint(alternate.geometry);
-        if (at) labels.push({ text: tag, at });
+        if (at) labels.push({ text: labelForWeight(alternate.weight), at });
       }
       map.setRouteMidpointLabels(labels);
     } else {
@@ -203,6 +218,20 @@ export function createUiApp(
             });
           },
           onTryAgain: () => {
+            if (live && !livePilot) {
+              setState({ status: "loading-tiles" });
+              void map.reloadPilot().then((pilot) => {
+                if (!pilot) {
+                  setState({ status: "tile-failed" });
+                  return;
+                }
+                livePilot = pilot;
+                routeClient = createRouteClient();
+                setState({ places: pilot.places, status: "normal" });
+                if (state.start && state.end) void routeBetween(state.start, state.end);
+              });
+              return;
+            }
             if (live && state.start && state.end) {
               setState({ status: "loading-tiles" });
               void routeBetween(state.start, state.end);
@@ -260,6 +289,22 @@ export function createUiApp(
       onPick: (place: PlacePick) => {
         if (live) pickPlace(place);
       },
+      onTryAgain: () => {
+        if (live && !livePilot) {
+          setState({ status: "loading-tiles" });
+          void map.reloadPilot().then((pilot) => {
+            if (!pilot) {
+              setState({ status: "tile-failed" });
+              return;
+            }
+            livePilot = pilot;
+            routeClient = createRouteClient();
+            setState({ places: pilot.places, status: "normal", screen: "search" });
+          });
+          return;
+        }
+        setState({ status: "normal" });
+      },
     };
     if (!searchMount || !body.contains(searchMount.root)) {
       searchMount = createSearchScreen(searchHandlers);
@@ -304,46 +349,45 @@ export function createUiApp(
       return;
     }
     map.setPilotBox(false);
-    const field = state.focusedField;
-    if (field === "from") {
-      map.setStartMarker(place.at, place.name);
+    const field = placePickField(state);
+    if (field === "to") {
+      map.setEndMarker(place.at, place.name);
+      if (!state.start) {
+        setState({
+          end: place,
+          toQuery: place.name,
+          editingField: true,
+          focusedField: "from",
+          fromQuery: "",
+          status: "normal",
+          screen: "search",
+          detent: "half",
+        });
+        return;
+      }
       setState({
-        start: place,
-        fromQuery: place.name,
-        editingField: true,
-        focusedField: state.end ? "to" : "to",
-        toQuery: state.end?.name ?? "",
-        status: "normal",
-        screen: state.end ? "compare" : "search",
+        end: place,
+        toQuery: place.name,
+        editingField: false,
+        screen: "compare",
         detent: "half",
+        status: state.routes.length === 0 ? "loading-tiles" : "normal",
       });
-      if (state.end) void routeBetween(place, state.end);
+      void routeBetween(state.start, place);
       return;
     }
-    if (!state.start) {
-      map.setStartMarker(place.at, place.name);
-      setState({
-        start: place,
-        fromQuery: place.name,
-        editingField: true,
-        focusedField: "to",
-        toQuery: "",
-        status: "normal",
-        screen: "search",
-        detent: "half",
-      });
-      return;
-    }
-    map.setEndMarker(place.at, place.name);
+    map.setStartMarker(place.at, place.name);
     setState({
-      end: place,
-      toQuery: place.name,
-      editingField: false,
-      screen: "compare",
+      start: place,
+      fromQuery: place.name,
+      editingField: true,
+      focusedField: state.end ? "to" : "to",
+      toQuery: state.end?.name ?? "",
+      status: "normal",
+      screen: state.end ? "compare" : "search",
       detent: "half",
-      status: state.routes.length === 0 ? "loading-tiles" : "normal",
     });
-    void routeBetween(state.start, place);
+    if (state.end) void routeBetween(place, state.end);
   }
 
   async function routeBetween(start: PlacePick, end: PlacePick, from?: LngLat): Promise<void> {
@@ -404,6 +448,7 @@ export function createUiApp(
       if (next) {
         event.preventDefault();
         setState({ selectedWeight: next });
+        queueMicrotask(() => focusSelectedRouteCard(body));
       }
     }
     if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
@@ -411,6 +456,7 @@ export function createUiApp(
       if (prev) {
         event.preventDefault();
         setState({ selectedWeight: prev });
+        queueMicrotask(() => focusSelectedRouteCard(body));
       }
     }
   });
@@ -420,11 +466,16 @@ export function createUiApp(
     setState({ detent: next, editingField: next === "half" && state.screen === "search" });
   });
 
-  bindVisualViewport((heightPx) => {
-    if (heightPx > 0) {
-      document.documentElement.style.setProperty("--sheet-edit-height", `${Math.round(heightPx)}px`);
+  bindVisualViewport((layout) => {
+    if (layout.editHeightPx > 0) {
+      document.documentElement.style.setProperty("--sheet-edit-height", `${Math.round(layout.editHeightPx)}px`);
+      document.documentElement.style.setProperty(
+        "--sheet-keyboard-offset",
+        `${Math.round(layout.keyboardOffsetPx)}px`,
+      );
     } else {
       document.documentElement.style.removeProperty("--sheet-edit-height");
+      document.documentElement.style.removeProperty("--sheet-keyboard-offset");
     }
   });
 
@@ -452,7 +503,7 @@ export function createUiApp(
         window.__shadeway = {
           places: pilot.places,
           pick(at) {
-            pickPlace({ name: `${at[1].toFixed(5)}, ${at[0].toFixed(5)}`, at: [at[0], at[1]] });
+            pickPlace({ name: COPY.droppedPin, at: [at[0], at[1]] });
           },
           route(from, to, minutes) {
             const client = routeClient;
@@ -469,7 +520,7 @@ export function createUiApp(
       }
       map.subscribeMapTap((position) => {
         if (state.screen === "in-route") return;
-        pickPlace({ name: `${position[1].toFixed(5)}, ${position[0].toFixed(5)}`, at: position });
+        pickPlace({ name: COPY.droppedPin, at: position });
       });
     });
   }

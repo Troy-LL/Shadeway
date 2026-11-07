@@ -23,5 +23,8 @@ export function createNoopMapController(): MapController {
     mapDiagnostics() {
       return null;
     },
+    async reloadPilot() {
+      return null;
+    },
   };
 }

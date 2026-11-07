@@ -150,15 +150,12 @@ function renderRouteCard(
   card.addEventListener("click", () => onSelect(route.weight));
 
   const title = document.createElement("h3");
-  title.className = "route-card__title";
+  title.className = "route-card__title sr-only";
   title.textContent = cardTitle(route);
 
   const meta = document.createElement("p");
   meta.className = "route-card__meta";
-  const distance = formatDistanceM(route.distanceM);
-  meta.textContent = route.shadeUnavailable
-    ? `${formatMinutes(route.totalMinutes)} · ${distance}`
-    : `${formatMinutes(route.totalMinutes)} · ${distance}`;
+  meta.textContent = `${cardTitle(route)} · ${formatMinutes(route.totalMinutes)} · ${formatDistanceM(route.distanceM)}`;
 
   const sun = document.createElement("p");
   sun.className = "route-card__sun";
@@ -171,14 +168,7 @@ function renderRouteCard(
 
   const strip = route.shadeUnavailable ? null : renderShadeStrip(route.segments);
 
-  card.append(sun, title);
-  if (route.note) {
-    const note = document.createElement("p");
-    note.className = "route-card__note";
-    note.textContent = route.note;
-    card.append(note);
-  }
-  card.append(meta);
+  card.append(title, sun, meta);
   if (strip) card.append(strip);
   if (selected) {
     const mark = document.createElement("span");

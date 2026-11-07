@@ -8,6 +8,7 @@ export interface SearchHandlers {
   readonly onToQuery: (query: string) => void;
   readonly onPick: (place: PlacePick) => void;
   readonly onSwap: () => void;
+  readonly onTryAgain: () => void;
 }
 
 const PILOT_RANK = new Map<string, number>([
@@ -40,8 +41,8 @@ export function suggestionPlaces(state: UiState, query: string): readonly PlaceP
 }
 
 function activePickName(state: UiState): string {
-  if (state.focusedField === "from") return state.fromQuery.trim() || state.start?.name || "";
-  return state.toQuery.trim() || state.end?.name || "";
+  if (state.focusedField === "from") return state.start?.name.trim() ?? "";
+  return state.end?.name.trim() ?? "";
 }
 
 function showNoMatchingPlace(state: UiState, query: string, matches: readonly PlacePick[]): boolean {
@@ -125,7 +126,7 @@ export function createSearchScreen(handlers: SearchHandlers): SearchScreenMount 
 
 export function updateSearchScreen(mount: SearchScreenMount, state: UiState, handlers: SearchHandlers): void {
   mount.statusSlot.replaceChildren();
-  const status = renderStatusBlock(state);
+  const status = renderStatusBlock(state, handlers.onTryAgain);
   const blockFields =
     status !== null &&
     state.status !== "no-route" &&

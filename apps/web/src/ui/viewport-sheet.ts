@@ -1,16 +1,20 @@
-export function bindVisualViewport(onChange: (heightPx: number) => void): () => void {
+import { layoutFromVisualViewport, type ViewportLayout } from "./viewport-layout";
+
+export function bindVisualViewport(onChange: (layout: ViewportLayout) => void): () => void {
   const apply = () => {
-    if (window.matchMedia("(min-width: 900px)").matches) {
-      onChange(0);
-      return;
-    }
+    const desktop = window.matchMedia("(min-width: 900px)").matches;
     const viewport = window.visualViewport;
-    if (!viewport) {
-      onChange(Math.max(164, window.innerHeight - 48));
-      return;
-    }
-    const topInset = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-top")) || 0;
-    onChange(Math.max(164, viewport.height - topInset - 8));
+    const topInset =
+      Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-top")) || 0;
+    onChange(
+      layoutFromVisualViewport({
+        innerHeight: window.innerHeight,
+        safeTopPx: topInset,
+        viewportHeight: viewport?.height ?? null,
+        viewportOffsetTop: viewport?.offsetTop ?? 0,
+        desktop,
+      }),
+    );
   };
   apply();
   window.visualViewport?.addEventListener("resize", apply);

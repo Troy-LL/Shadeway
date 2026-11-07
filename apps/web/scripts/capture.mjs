@@ -209,9 +209,15 @@ async function shootSafeArea(browser, outputDir, artifactsDir) {
   await page.evaluate((to) => window.__shadeway.pick(to), shotWalk.to);
   await page.waitForSelector(".compare-screen", { timeout: 30_000 });
   await setSlot(page, "12", "12:00");
-  const path = resolve(outputDir, "phone-compare-safe-34.png");
-  await page.screenshot({ path });
-  await mirror(path, artifactsDir, "phone-compare-safe-34.png");
+  const comparePath = resolve(outputDir, "phone-compare-safe-34.png");
+  await page.screenshot({ path: comparePath });
+  await mirror(comparePath, artifactsDir, "phone-compare-safe-34.png");
+  await page.getByRole("button", { name: "Start" }).click();
+  await page.waitForSelector(".in-route-screen");
+  await page.waitForTimeout(500);
+  const inRoutePath = resolve(outputDir, "phone-in-route-safe-34.png");
+  await page.screenshot({ path: inRoutePath });
+  await mirror(inRoutePath, artifactsDir, "phone-in-route-safe-34.png");
   await context.close();
 }
 
@@ -265,8 +271,10 @@ async function exercise(browser) {
   await page.locator(".suggest__option").first().click();
   await page.waitForSelector(".route-card__sun", { timeout: 30_000 });
   await setSlot(page, "12", "12:00");
-  const titles = await page.locator(".route-card__title").allTextContents();
-  if (titles.join(",") !== "Shadiest,Fastest") throw new Error(`card order ${titles.join(",")}`);
+  const metaLines = await page.locator(".route-card__meta").allTextContents();
+  if (!metaLines[0]?.startsWith("Shadiest") || !metaLines[1]?.startsWith("Fastest")) {
+    throw new Error(`card order ${metaLines.join("|")}`);
+  }
   const selected = await page.locator(".route-card[aria-checked='true'] .route-card__title").textContent();
   if (selected !== "Shadiest") throw new Error(`selected route ${selected}`);
   const labelCount = await page.locator(".sheet-estimate-label").count();

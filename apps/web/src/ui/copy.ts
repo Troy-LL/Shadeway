@@ -17,6 +17,7 @@ export const COPY = {
   shadeHours: "Shade estimates available 06:00–18:00",
   routeOverview: "Route overview · live position unavailable",
   locationOff: "Location off",
+  droppedPin: "Dropped pin",
   start: "Start",
   end: "End",
   back: "Back",

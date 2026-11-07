@@ -4,6 +4,8 @@ import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 setWorkerUrl(maplibreWorkerUrl);
+import { applyFlatMapGestures, readGestureDiagnostics } from "./map-gestures";
+import { pilotVeilGeoJson } from "./veil-geojson";
 import type { RouteDraw, ShadowDraw } from "./scene";
 
 const SHADOW = [20, 32, 43, 255] as const;
@@ -43,6 +45,9 @@ export interface MapScene {
 export interface MapLayerDiagnostics {
   readonly pitch: number;
   readonly bearing: number;
+  readonly maxPitch: number;
+  readonly dragRotateEnabled: boolean;
+  readonly touchRotationEnabled: boolean;
   readonly layerVisibility: Readonly<Record<string, string>>;
   readonly symbolLayerIds: readonly string[];
 }
@@ -119,6 +124,7 @@ export function createMapLibreView(root: HTMLElement): MapView {
     else queue.push(job);
   };
   map.once("load", () => {
+    applyFlatMapGestures(map);
     map.addSource("parks", { type: "geojson", data: emptyCollection() });
     map.addSource("water", { type: "geojson", data: emptyCollection() });
     map.addSource("roads", { type: "geojson", data: emptyCollection() });
@@ -311,10 +317,7 @@ export function createMapLibreView(root: HTMLElement): MapView {
       endMarker = placeMarker(map, endMarker, end, "end", labels?.endLabel);
     },
     setPilotVeil(bbox) {
-      const data =
-        bbox === null
-          ? emptyCollection()
-          : ringsCollection(veilOutsideBbox(bbox));
+      const data = bbox === null ? emptyCollection() : pilotVeilGeoJson(bbox);
       whenLoaded(() => {
         const source = map.getSource("pilot-veil");
         if (isGeoJsonSource(source)) source.setData(data);
@@ -366,41 +369,6 @@ export function createMapLibreView(root: HTMLElement): MapView {
 
 const SHADOW_LAYERS = ["shadows", "shadow-edge", "shadow-edge-estimated"] as const;
 
-function veilOutsideBbox(bbox: readonly [number, number, number, number]): (readonly LngLat[])[] {
-  const [w, s, e, n] = bbox;
-  const west = w - 0.15;
-  const east = e + 0.15;
-  const south = s - 0.15;
-  const north = n + 0.15;
-  const ring = (coords: LngLat[]) => [...coords, coords[0]!];
-  return [
-    ring([
-      [west, north],
-      [east, north],
-      [east, 90],
-      [west, 90],
-    ]),
-    ring([
-      [west, -90],
-      [east, -90],
-      [east, south],
-      [west, south],
-    ]),
-    ring([
-      [west, south],
-      [w, south],
-      [w, north],
-      [west, north],
-    ]),
-    ring([
-      [e, south],
-      [east, south],
-      [east, north],
-      [e, north],
-    ]),
-  ];
-}
-
 function readMapDiagnostics(map: Map): MapLayerDiagnostics | null {
   const style = map.getStyle();
   if (!style) return null;
@@ -411,9 +379,13 @@ function readMapDiagnostics(map: Map): MapLayerDiagnostics | null {
     layerVisibility[id] = visibility === "none" ? "none" : "visible";
   }
   const symbolLayerIds = style.layers.filter((layer) => layer.type === "symbol").map((layer) => layer.id);
+  const gestures = readGestureDiagnostics(map);
   return {
-    pitch: map.getPitch(),
-    bearing: map.getBearing(),
+    pitch: gestures.pitch,
+    bearing: gestures.bearing,
+    maxPitch: gestures.maxPitch,
+    dragRotateEnabled: gestures.dragRotateEnabled,
+    touchRotationEnabled: gestures.touchRotationEnabled,
     layerVisibility,
     symbolLayerIds,
   };

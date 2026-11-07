@@ -35,7 +35,8 @@ describe("Compare route cards", () => {
     );
     const root = renderUiState(defaultUiState({ screen: "compare", detent: "half", routes }));
     document.body.append(root);
-    expect(root.querySelector(".route-card__note")?.textContent).toBe(COPY.shadiestAndFastest);
+    const meta = root.querySelector(".route-card .route-card__meta");
+    expect(meta?.textContent).toContain(COPY.shadiestAndFastest);
     document.body.replaceChildren();
   });
 
@@ -84,21 +85,38 @@ describe("Search", () => {
     expect(suggestions.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("keeps a coordinate pick label instead of the no-match copy", () => {
-    const coord = "14.55148, 121.04862";
+  it("keeps a dropped pin label instead of the no-match copy", () => {
     const root = renderUiState(
       defaultUiState({
         screen: "search",
         detent: "half",
         editingField: true,
         focusedField: "from",
-        fromQuery: coord,
-        start: { name: coord, at: [121.04862, 14.55148] },
+        fromQuery: COPY.droppedPin,
+        start: { name: COPY.droppedPin, at: [121.04862, 14.55148] },
       }),
     );
     document.body.append(root);
     const msg = root.querySelector(".status-message--secondary");
     expect(msg === null || (msg as HTMLElement).hidden).toBe(true);
+    document.body.replaceChildren();
+  });
+
+  it("shows no matching place for an unmatched query", () => {
+    const root = renderUiState(
+      defaultUiState({
+        screen: "search",
+        detent: "half",
+        editingField: true,
+        focusedField: "to",
+        toQuery: "zzzzz-no-place",
+        places: [{ name: "Market! Market!", at: [121.056, 14.549] }],
+      }),
+    );
+    document.body.append(root);
+    const noMatch = root.querySelector(".status-message--secondary");
+    expect(noMatch?.textContent).toBe(COPY.noMatchingPlace);
+    expect((noMatch as HTMLElement).hidden).toBe(false);
     document.body.replaceChildren();
   });
 

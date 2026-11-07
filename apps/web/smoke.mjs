@@ -35,11 +35,26 @@ try {
     timeout: 60_000,
   });
 
+  const searchToField = await page.evaluate(() => {
+    const to = document.querySelectorAll(".search-field")[1];
+    const sheet = document.querySelector(".shadeway-sheet");
+    if (!to || !sheet) return null;
+    const field = to.getBoundingClientRect();
+    const sheetRect = sheet.getBoundingClientRect();
+    return { fieldBottom: field.bottom, sheetBottom: sheetRect.bottom, fieldTop: field.top, sheetTop: sheetRect.top };
+  });
+  if (!searchToField || searchToField.fieldBottom > searchToField.sheetBottom + 0.5 || searchToField.fieldTop < searchToField.sheetTop - 0.5) {
+    throw new Error(`To field clipped in search sheet: ${JSON.stringify(searchToField)}`);
+  }
+
   const shadowsOff = await page.evaluate(() => window.__shadeway.mapDiagnostics());
   if (!shadowsOff) throw new Error("map diagnostics missing");
   if (shadowsOff.pitch !== 0 || shadowsOff.bearing !== 0) {
     throw new Error(`camera not flat pitch=${shadowsOff.pitch} bearing=${shadowsOff.bearing}`);
   }
+  if (shadowsOff.maxPitch !== 0) throw new Error(`maxPitch unlocked: ${shadowsOff.maxPitch}`);
+  if (shadowsOff.dragRotateEnabled) throw new Error("dragRotate should be disabled");
+  if (shadowsOff.touchRotationEnabled) throw new Error("touch rotation should be disabled");
   for (const id of ["shadows", "shadow-edge", "shadow-edge-estimated"]) {
     if (shadowsOff.layerVisibility[id] !== "none") throw new Error(`shadow layer ${id} expected none, got ${shadowsOff.layerVisibility[id]}`);
   }
@@ -78,12 +93,45 @@ try {
   const selected = await page.locator(".route-card[aria-checked='true'] .route-card__title").textContent();
   if (selected !== "Shadiest") throw new Error(`expected Shadiest, got ${selected}`);
 
+  const fastestMeta = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll(".route-card")];
+    const fastest = cards.find((card) => card.textContent?.includes("Fastest"));
+    const meta = fastest?.querySelector(".route-card__meta");
+    const footer = document.querySelector(".compare-screen__footer");
+    if (!meta || !footer) return null;
+    return { metaBottom: meta.getBoundingClientRect().bottom, footerTop: footer.getBoundingClientRect().top };
+  });
+  if (!fastestMeta || fastestMeta.metaBottom > fastestMeta.footerTop + 0.5) {
+    throw new Error(`Fastest meta below compare footer fold: ${JSON.stringify(fastestMeta)}`);
+  }
+
+  await page.evaluate(() => document.documentElement.style.setProperty("--safe-bottom", "34px"));
+  const startInset = await page.evaluate(() => {
+    const button = document.querySelector(".compare-screen__footer .primary-action");
+    if (!button) return null;
+    const bottom = button.getBoundingClientRect().bottom;
+    return { bottom, maxBottom: window.innerHeight - 16 - 34 };
+  });
+  if (!startInset || startInset.bottom > startInset.maxBottom + 0.5) {
+    throw new Error(`Start button inside home indicator inset: ${JSON.stringify(startInset)}`);
+  }
+
   await mkdir(resolve(root, "screenshots"), { recursive: true });
   await page.screenshot({ path: resolve(root, "screenshots/compare-phone.png") });
   await page.getByRole("button", { name: "Start" }).click();
   await page.waitForSelector(".in-route-screen");
   await page.waitForTimeout(700);
   await page.screenshot({ path: resolve(root, "screenshots/in-route-phone.png") });
+
+  const endInset = await page.evaluate(() => {
+    const button = document.querySelector(".in-route-screen .primary-action");
+    if (!button) return null;
+    const bottom = button.getBoundingClientRect().bottom;
+    return { bottom, maxBottom: window.innerHeight - 16 - 34 };
+  });
+  if (!endInset || endInset.bottom > endInset.maxBottom + 0.5) {
+    throw new Error(`End button inside home indicator inset: ${JSON.stringify(endInset)}`);
+  }
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`http://127.0.0.1:${port}`, { waitUntil: "networkidle" });

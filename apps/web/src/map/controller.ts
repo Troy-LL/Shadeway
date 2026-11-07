@@ -10,6 +10,7 @@ import {
   shadowDraws,
   type RouteDraw,
 } from "./scene";
+import { computeSheetPadding as sheetPadding } from "./sheet-padding";
 import { createMapLibreView, type CameraMove, type MapLayerDiagnostics, type MapView } from "./view";
 import { COPY } from "../ui/copy";
 
@@ -37,6 +38,7 @@ export interface MapController {
   whenReady(): Promise<PilotData | null>;
   subscribeMapTap(listener: (position: LngLat) => void): () => void;
   mapDiagnostics(): MapLayerDiagnostics | null;
+  reloadPilot(): Promise<PilotData | null>;
 }
 
 export interface MapControllerOptions {
@@ -176,6 +178,21 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
     setRouteMidpointLabels(labels) {
       view.setRouteMidpointLabels(labels);
     },
+    async reloadPilot() {
+      try {
+        const loaded = await loadPilot(options.dataUrl ?? "/data/bgc/", options.fetch ?? fetch);
+        pilot = loaded;
+        attributionLines = loaded.attribution;
+        paintAttribution();
+        view.setRoads(loaded.roads);
+        view.setLand(loaded.land);
+        draw();
+        moveCamera(false);
+        return loaded;
+      } catch {
+        return null;
+      }
+    },
   };
 
   void boot();
@@ -263,6 +280,9 @@ export function createNoopMapController(): MapController {
     mapDiagnostics() {
       return null;
     },
+    async reloadPilot() {
+      return null;
+    },
   };
 }
 
@@ -318,15 +338,6 @@ function frameCamera(_coordinates: readonly LngLat[]): CameraMove {
 
 function motionMs(): number {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 350;
-}
-
-function sheetPadding(): { top: number; right: number; bottom: number; left: number } {
-  const sheet = document.querySelector(".shadeway-sheet");
-  const wide = window.matchMedia("(min-width: 900px)").matches;
-  if (wide) return { top: 32, right: 32, bottom: 32, left: 416 };
-  const rect = sheet instanceof HTMLElement ? sheet.getBoundingClientRect() : null;
-  const sheetHeight = rect ? Math.round(rect.height) : 164;
-  return { top: 64, right: 16, bottom: sheetHeight + 16, left: 16 };
 }
 
 function renderAttribution(host: HTMLElement, lines: readonly string[]): void {
