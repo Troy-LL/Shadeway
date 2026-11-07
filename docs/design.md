@@ -40,7 +40,7 @@ Flat 2D Shadeway UI per ENG-021. Mobile-first at 390x844, desktop side panel at 
 ## Map
 
 - Flat basemap, building footprints near the route, optional shadows (fill plus estimated edge only when on; all shadow layers off by default via the Shadows map control), sun/shade route styling per ENG-021 tokens.
-- Phone Search half sheet is `176px` plus `--safe-bottom` on the sheet. Compare and In-route phone sheets sit on `bottom: var(--safe-bottom)` with `16px` footer or screen padding above that inset (50px total when safe is 34px).
+- Phone Search half sheet is `176px` plus `--safe-bottom` on the sheet. Compare and In-route footers use `calc(16px + var(--safe-bottom))`. When the keyboard is open, Compare collapses to a peek line (`compare-peek-summary`) and the sheet tracks `visualViewport` (48px edit margin, keyboard offset on `bottom`).
 - Other phone content stacks: Search peek `96px`, Compare body up to `420px` / `62dvh`, In-route height content-driven up to `62dvh`.
 - No place-name labels on the map; start and end markers and attribution stay.
 - Pitch and bearing 0; rotation locked.

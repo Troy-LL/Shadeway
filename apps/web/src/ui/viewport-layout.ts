@@ -20,6 +20,6 @@ export function layoutFromVisualViewport(input: {
     };
   }
   const keyboardOffsetPx = Math.max(0, input.innerHeight - input.viewportHeight - input.viewportOffsetTop);
-  const editHeightPx = Math.max(176, input.viewportHeight - input.safeTopPx - 8);
+  const editHeightPx = Math.max(176, input.viewportHeight - input.safeTopPx - 48);
   return { editHeightPx, keyboardOffsetPx };
 }

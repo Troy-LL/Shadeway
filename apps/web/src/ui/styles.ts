@@ -15,7 +15,9 @@ export const UI_STYLES = `
   --color-focus: #0066cc;
   --font-system: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --text-34: 34px;
+  --text-26: 26px;
   --text-28: 28px;
+  --color-placeholder: #4b545e;
   --text-17: 17px;
   --text-15: 15px;
   --text-13: 13px;
@@ -35,6 +37,7 @@ export const UI_STYLES = `
 
 @media (prefers-color-scheme: dark) {
   :root {
+    --color-placeholder: #9aa3ad;
     --color-sun: #ffb84d;
     --color-shade: #3aa0b3;
     --color-ink: #f5f7fa;
@@ -129,12 +132,10 @@ export const UI_STYLES = `
 }
 
 .shadeway-sheet[data-screen='compare'] {
-  bottom: var(--safe-bottom);
   height: min(62dvh, 420px);
 }
 
 .shadeway-sheet[data-screen='in-route'] {
-  bottom: var(--safe-bottom);
   height: auto;
   max-height: min(62dvh, calc(100dvh - var(--safe-top) - 48px));
 }
@@ -238,7 +239,7 @@ export const UI_STYLES = `
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding-bottom: var(--space-4);
+  padding-bottom: calc(var(--space-4) + var(--safe-bottom));
 }
 
 .search-fields {
@@ -257,13 +258,18 @@ export const UI_STYLES = `
 
 .search-field {
   width: 100%;
-  min-height: 48px;
+  min-height: var(--touch-min);
   border-radius: var(--radius-card);
   border: 1px solid var(--color-border);
   padding: 0 var(--space-3);
-  font-size: 16px;
+  font-size: var(--text-17);
   background: var(--color-surface-step);
   color: var(--color-text);
+}
+
+.search-field::placeholder {
+  color: var(--color-placeholder);
+  opacity: 1;
 }
 
 .search-field--active {
@@ -333,6 +339,15 @@ export const UI_STYLES = `
   font-size: var(--text-15);
 }
 
+@media (min-width: 900px) {
+  .departure-chip {
+    white-space: normal;
+    text-align: left;
+    line-height: 1.35;
+    max-width: 100%;
+  }
+}
+
 .departure-picker__list {
   display: flex;
   flex-direction: column;
@@ -341,9 +356,19 @@ export const UI_STYLES = `
   overflow: auto;
 }
 
+.departure-picker__check {
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
 .departure-picker__option {
+  position: relative;
   min-height: var(--touch-min);
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-6);
   border: 0;
   border-radius: var(--radius-card);
   background: transparent;
@@ -373,8 +398,8 @@ export const UI_STYLES = `
   border: 2px solid var(--color-border);
   padding: 6px var(--space-3) 7px;
   background: var(--color-surface);
-  min-height: 88px;
-  height: 88px;
+  min-height: 5.5rem;
+  height: 5.5rem;
   text-align: left;
   width: 100%;
   cursor: pointer;
@@ -389,7 +414,7 @@ export const UI_STYLES = `
 }
 
 .route-card__sun {
-  font-size: 26px;
+  font-size: var(--text-26);
   font-weight: 600;
   color: var(--color-ink);
   margin: 0;
@@ -490,7 +515,33 @@ export const UI_STYLES = `
 }
 
 .in-route-screen {
-  padding-bottom: var(--space-4);
+  padding-bottom: calc(var(--space-4) + var(--safe-bottom));
+}
+
+.compare-peek-summary {
+  display: none;
+  margin: 0;
+  padding: 0 var(--space-4);
+  font-size: var(--text-15);
+  color: var(--color-text-secondary);
+  line-height: var(--touch-min);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shadeway-sheet[data-screen='compare'][data-keyboard='true'] {
+  height: calc(96px + var(--safe-bottom));
+}
+
+.shadeway-sheet[data-screen='compare'][data-keyboard='true'] .compare-screen__scroll,
+.shadeway-sheet[data-screen='compare'][data-keyboard='true'] .compare-screen__footer,
+.shadeway-sheet[data-screen='compare'][data-keyboard='true'] .compare-header {
+  display: none;
+}
+
+.shadeway-sheet[data-screen='compare'][data-keyboard='true'] .compare-peek-summary {
+  display: block;
 }
 
 .in-route-screen__status {

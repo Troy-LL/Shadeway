@@ -77,15 +77,21 @@ export function createSearchScreen(handlers: SearchHandlers): SearchScreenMount 
   const from = document.createElement("input");
   from.className = "search-field";
   from.type = "search";
+  from.id = "search-from";
   from.setAttribute("aria-label", COPY.from);
+  from.setAttribute("aria-controls", "search-suggestions");
+  from.setAttribute("aria-autocomplete", "list");
   from.addEventListener("focus", () => handlers.onFocusField("from"));
   from.addEventListener("input", () => handlers.onFromQuery(from.value));
 
   const to = document.createElement("input");
   to.className = "search-field";
   to.type = "search";
+  to.id = "search-to";
   to.placeholder = COPY.whereTo;
   to.setAttribute("aria-label", COPY.to);
+  to.setAttribute("aria-controls", "search-suggestions");
+  to.setAttribute("aria-autocomplete", "list");
   to.addEventListener("focus", () => handlers.onFocusField("to"));
   to.addEventListener("input", () => handlers.onToQuery(to.value));
 
@@ -98,6 +104,7 @@ export function createSearchScreen(handlers: SearchHandlers): SearchScreenMount 
 
   const suggest = document.createElement("div");
   suggest.className = "suggest";
+  suggest.id = "search-suggestions";
   suggest.setAttribute("role", "listbox");
   suggest.hidden = true;
 
@@ -157,18 +164,32 @@ export function updateSearchScreen(mount: SearchScreenMount, state: UiState, han
   const matches = suggestionPlaces(state, query);
 
   mount.suggest.replaceChildren();
+  const activeField = state.focusedField === "from" ? mount.from : mount.to;
+  const inactiveField = state.focusedField === "from" ? mount.to : mount.from;
+  inactiveField.setAttribute("aria-expanded", "false");
+  inactiveField.removeAttribute("aria-activedescendant");
   if (matches.length > 0) {
     mount.suggest.hidden = false;
-    for (const place of matches) {
+    mount.suggest.setAttribute("aria-label", state.focusedField === "from" ? COPY.from : COPY.to);
+    let firstId = "";
+    matches.forEach((place, index) => {
       const option = document.createElement("button");
       option.type = "button";
       option.className = "suggest__option";
+      option.id = `search-suggest-${index}`;
       option.textContent = place.name;
+      option.setAttribute("role", "option");
+      option.setAttribute("aria-selected", "false");
+      if (index === 0) firstId = option.id;
       option.addEventListener("click", () => handlers.onPick(place));
       mount.suggest.append(option);
-    }
+    });
+    activeField.setAttribute("aria-expanded", "true");
+    if (firstId) activeField.setAttribute("aria-activedescendant", firstId);
   } else {
     mount.suggest.hidden = true;
+    activeField.setAttribute("aria-expanded", "false");
+    activeField.removeAttribute("aria-activedescendant");
   }
 
   mount.noMatch.hidden = !showNoMatchingPlace(state, query, matches);

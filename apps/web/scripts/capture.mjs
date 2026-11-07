@@ -268,9 +268,11 @@ async function shootOutsideHours(browser, outputDir, artifactsDir) {
   if (meta.some((line) => line.includes(COPY_MARKER_SHADIEST_AND_FASTEST))) {
     throw new Error(`outside-hours compare should not show merged title: ${meta.join("|")}`);
   }
-  const fastestMeta = meta.find((line) => line.startsWith("Fastest"));
-  if (!fastestMeta?.includes("Fastest walk")) {
-    throw new Error(`outside-hours fastest label expected Fastest walk, got ${fastestMeta}`);
+  if (!meta.every((line) => line.includes("Fastest walk"))) {
+    throw new Error(`outside-hours route cards should use Fastest walk: ${meta.join("|")}`);
+  }
+  if (meta.some((line) => line.includes("Shadiest"))) {
+    throw new Error(`outside-hours compare must not claim Shadiest: ${meta.join("|")}`);
   }
   const path = resolve(outputDir, "phone-compare-outside-hours.png");
   await page.screenshot({ path });

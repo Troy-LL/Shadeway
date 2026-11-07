@@ -40,6 +40,14 @@ export function renderCompareContent(state: UiState, handlers: CompareHandlers):
   const container = document.createElement("div");
   container.className = "compare-screen";
 
+  const peek = document.createElement("p");
+  peek.className = "compare-peek-summary";
+  const selected = state.routes.find((route) => route.weight === state.selectedWeight);
+  if (selected) {
+    peek.textContent = `${compareCardTitle(selected)} · ${formatMinutes(selected.totalMinutes)} · ${formatDistanceM(selected.distanceM)}`;
+  }
+  container.append(peek);
+
   const header = document.createElement("div");
   header.className = "compare-header";
   const back = document.createElement("button");
@@ -107,6 +115,17 @@ export function renderCompareContent(state: UiState, handlers: CompareHandlers):
   group.className = "route-cards";
   group.setAttribute("role", "radiogroup");
   group.setAttribute("aria-label", "Routes");
+  group.addEventListener("keydown", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || !target.classList.contains("route-card")) return;
+    if (event.key !== " " && event.key !== "Enter") return;
+    event.preventDefault();
+    const weight = target.dataset.weight;
+    if (weight === "shadiest" || weight === "fastest") {
+      handlers.onSelectWeight(weight);
+      target.focus();
+    }
+  });
 
   const routes = visibleRoutes(state);
   for (const route of routes) {
@@ -144,6 +163,7 @@ function renderRouteCard(
   const card = document.createElement("button");
   card.type = "button";
   card.className = "route-card";
+  card.dataset.weight = route.weight;
   card.setAttribute("role", "radio");
   card.setAttribute("aria-checked", selected ? "true" : "false");
   card.tabIndex = selected ? 0 : -1;
@@ -181,9 +201,7 @@ function renderRouteCard(
 }
 
 export function compareCardTitle(route: RouteCardModel): string {
-  if (route.shadeUnavailable) {
-    return route.weight === "fastest" ? COPY.fastestWalk : COPY.shadiest;
-  }
+  if (route.shadeUnavailable) return COPY.fastestWalk;
   if (route.note === COPY.availableRoute) return COPY.availableRoute;
   if (route.note === COPY.shadiestAndFastest) return COPY.shadiestAndFastest;
   if (route.weight === "shadiest") return COPY.shadiest;

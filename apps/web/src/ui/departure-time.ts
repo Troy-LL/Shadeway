@@ -95,6 +95,13 @@ export function renderDeparturePicker(options: DeparturePickerOptions): HTMLElem
   nowRow.setAttribute("role", "option");
   nowRow.setAttribute("aria-selected", options.departureIsNow ? "true" : "false");
   nowRow.addEventListener("click", () => options.onPickNow());
+  if (options.departureIsNow) {
+    const mark = document.createElement("span");
+    mark.className = "departure-picker__check";
+    mark.textContent = "✓";
+    mark.setAttribute("aria-hidden", "true");
+    nowRow.append(mark);
+  }
   list.append(nowRow);
 
   for (const slot of listedDepartureSlots()) {
@@ -106,6 +113,13 @@ export function renderDeparturePicker(options: DeparturePickerOptions): HTMLElem
     const selected = !options.departureIsNow && slot === options.slot;
     row.setAttribute("aria-selected", selected ? "true" : "false");
     row.addEventListener("click", () => options.onPickSlot(slot));
+    if (selected) {
+      const mark = document.createElement("span");
+      mark.className = "departure-picker__check";
+      mark.textContent = "✓";
+      mark.setAttribute("aria-hidden", "true");
+      row.append(mark);
+    }
     list.append(row);
   }
 

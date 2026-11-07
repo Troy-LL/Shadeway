@@ -32,7 +32,7 @@ describe("compareCardTitle", () => {
         }),
       ),
     ).toBe(COPY.fastestWalk);
-    expect(compareCardTitle(card({ weight: "shadiest", shadeUnavailable: true }))).toBe(COPY.shadiest);
+    expect(compareCardTitle(card({ weight: "shadiest", shadeUnavailable: true }))).toBe(COPY.fastestWalk);
   });
 
   it("still merges titles only when shade is available", () => {

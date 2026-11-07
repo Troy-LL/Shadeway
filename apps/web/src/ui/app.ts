@@ -222,12 +222,12 @@ export function createUiApp(
               setState({ status: "loading-tiles" });
               void map.reloadPilot().then((pilot) => {
                 if (!pilot) {
-                  setState({ status: "tile-failed" });
+                  setState({ status: "tile-failed", screen: "search", editingField: false });
                   return;
                 }
                 livePilot = pilot;
                 routeClient = createRouteClient();
-                setState({ places: pilot.places, status: "normal" });
+                setState({ places: pilot.places, status: "normal", screen: "search" });
                 if (state.start && state.end) void routeBetween(state.start, state.end);
               });
               return;
@@ -294,7 +294,7 @@ export function createUiApp(
           setState({ status: "loading-tiles" });
           void map.reloadPilot().then((pilot) => {
             if (!pilot) {
-              setState({ status: "tile-failed" });
+              setState({ status: "tile-failed", screen: "search", editingField: false });
               return;
             }
             livePilot = pilot;
@@ -324,6 +324,9 @@ export function createUiApp(
     syncMap();
     if (patch.locationDenied !== undefined) {
       shell.dataset.locationDenied = patch.locationDenied ? "true" : "false";
+    }
+    if (patch.locationDenied === true) {
+      queueMicrotask(() => searchMount?.from.focus());
     }
   };
 
@@ -435,7 +438,7 @@ export function createUiApp(
       document.documentElement.dataset.route = "ready";
     } catch {
       if (generation !== routeGeneration) return;
-      setState({ status: "tile-failed", screen: "compare", detent: "half" });
+      setState({ status: "tile-failed", screen: "search", detent: "half", editingField: false });
     }
   }
 
@@ -477,6 +480,7 @@ export function createUiApp(
       document.documentElement.style.removeProperty("--sheet-edit-height");
       document.documentElement.style.removeProperty("--sheet-keyboard-offset");
     }
+    sheet.dataset.keyboard = layout.keyboardOffsetPx > 0 ? "true" : "false";
   });
 
   render();
@@ -489,8 +493,9 @@ export function createUiApp(
       if (!pilot) {
         setState({
           status: offline ? "offline" : "tile-failed",
-          screen: offline ? "search" : "compare",
+          screen: "search",
           detent: "half",
+          editingField: false,
         });
         return;
       }
@@ -523,6 +528,13 @@ export function createUiApp(
         if (state.screen === "in-route") return;
         pickPlace({ name: COPY.droppedPin, at: position });
       });
+      if (typeof navigator !== "undefined" && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          () => {},
+          () => setState({ locationDenied: true, focusedField: "from", editingField: true, screen: "search", detent: "half" }),
+          { timeout: 8_000, maximumAge: 60_000 },
+        );
+      }
     });
   }
 
