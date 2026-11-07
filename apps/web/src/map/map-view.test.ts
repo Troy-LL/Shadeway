@@ -15,11 +15,15 @@ describe("shadowLayerVisibility", () => {
       shadows: "none",
       "shadow-edge": "none",
       "shadow-edge-estimated": "none",
+      "tree-shadows": "none",
+      "tree-shadow-edge": "none",
     });
     expect(shadowLayerVisibility(true)).toEqual({
       shadows: "visible",
       "shadow-edge": "none",
       "shadow-edge-estimated": "visible",
+      "tree-shadows": "visible",
+      "tree-shadow-edge": "visible",
     });
   });
 });
