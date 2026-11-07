@@ -296,21 +296,29 @@ export function createMapLibreView(root: HTMLElement): MapView {
       whenLoaded(() => map.easeTo(easeOptions(camera, durationMs)));
     },
     fit(bounds, padding, camera, durationMs) {
-      whenLoaded(() =>
-        map.fitBounds(
-          [
-            [bounds[0], bounds[1]],
-            [bounds[2], bounds[3]],
-          ],
-          {
-            padding,
-            duration: durationMs,
-            pitch: 0,
-            bearing: camera.bearing,
-            maxZoom: 17,
-          },
-        ),
-      );
+      whenLoaded(() => {
+        const container = map.getContainer();
+        if (!container.isConnected || container.clientWidth < 2 || container.clientHeight < 2) return;
+        const inset = clampFitPadding(padding, container.clientWidth, container.clientHeight);
+        if (!inset) return;
+        try {
+          map.fitBounds(
+            [
+              [bounds[0], bounds[1]],
+              [bounds[2], bounds[3]],
+            ],
+            {
+              padding: inset,
+              duration: durationMs,
+              pitch: 0,
+              bearing: camera.bearing,
+              maxZoom: 17,
+            },
+          );
+        } catch {
+          // fitBounds can fail when padding exceeds the map or the map is torn down mid-frame.
+        }
+      });
     },
     setMarkers(start, end, labels) {
       startMarker = placeMarker(map, startMarker, start, "start", labels?.startLabel);
@@ -525,6 +533,30 @@ function emptyCollection() {
 
 function positions(line: readonly LngLat[]): [number, number][] {
   return line.map((point) => [point[0], point[1]]);
+}
+
+export function clampFitPadding(
+  padding: { readonly top: number; readonly right: number; readonly bottom: number; readonly left: number },
+  width: number,
+  height: number,
+): { top: number; right: number; bottom: number; left: number } | null {
+  const maxVertical = Math.max(0, height - 2);
+  const maxHorizontal = Math.max(0, width - 2);
+  if (padding.top + padding.bottom >= maxVertical || padding.left + padding.right >= maxHorizontal) {
+    const scale = Math.min(
+      maxVertical / Math.max(1, padding.top + padding.bottom),
+      maxHorizontal / Math.max(1, padding.left + padding.right),
+      1,
+    );
+    if (scale <= 0) return null;
+    return {
+      top: Math.floor(padding.top * scale),
+      right: Math.floor(padding.right * scale),
+      bottom: Math.floor(padding.bottom * scale),
+      left: Math.floor(padding.left * scale),
+    };
+  }
+  return padding;
 }
 
 function easeOptions(camera: CameraMove, durationMs: number): EaseToOptions {

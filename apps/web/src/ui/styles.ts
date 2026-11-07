@@ -129,10 +129,12 @@ export const UI_STYLES = `
 }
 
 .shadeway-sheet[data-screen='compare'] {
+  bottom: var(--safe-bottom);
   height: min(62dvh, 420px);
 }
 
 .shadeway-sheet[data-screen='in-route'] {
+  bottom: var(--safe-bottom);
   height: auto;
   max-height: min(62dvh, calc(100dvh - var(--safe-top) - 48px));
 }
@@ -236,7 +238,7 @@ export const UI_STYLES = `
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding-bottom: calc(16px + var(--safe-bottom));
+  padding-bottom: var(--space-4);
 }
 
 .search-fields {
@@ -488,7 +490,7 @@ export const UI_STYLES = `
 }
 
 .in-route-screen {
-  padding-bottom: calc(16px + var(--safe-bottom));
+  padding-bottom: var(--space-4);
 }
 
 .in-route-screen__status {

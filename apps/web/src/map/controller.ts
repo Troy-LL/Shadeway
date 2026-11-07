@@ -389,6 +389,7 @@ function showMissing(message: HTMLElement, error: unknown): void {
 
 function watchSheet(attribution: HTMLElement, shadowToggle: HTMLElement, onDetent: () => void): void {
   const place = () => {
+    if (!attribution.isConnected || !shadowToggle.isConnected) return;
     const sheet = document.querySelector(".shadeway-sheet");
     const height = sheet instanceof HTMLElement ? sheet.getBoundingClientRect().height : 0;
     const floating = sheet instanceof HTMLElement && sheet.getBoundingClientRect().width < window.innerWidth - 48;

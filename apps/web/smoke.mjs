@@ -14,6 +14,7 @@ const walk = {
 };
 
 const port = 5173;
+const consoleIssues = [];
 const server = spawn("pnpm", ["exec", "vite", "--port", String(port), "--host", "127.0.0.1", "--strictPort"], {
   cwd: root,
   stdio: "inherit",
@@ -26,7 +27,7 @@ try {
   });
 
   const page = await browser.newPage({ colorScheme: "light" });
-  page.on("pageerror", (error) => console.error(error));
+  wireConsoleGuard(page, consoleIssues);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`http://127.0.0.1:${port}`, { waitUntil: "networkidle" });
   await page.waitForSelector(".maplibregl-canvas", { timeout: 30_000 });
@@ -106,14 +107,10 @@ try {
   }
 
   await page.evaluate(() => document.documentElement.style.setProperty("--safe-bottom", "34px"));
-  const startInset = await page.evaluate(() => {
-    const button = document.querySelector(".compare-screen__footer .primary-action");
-    if (!button) return null;
-    const bottom = button.getBoundingClientRect().bottom;
-    return { bottom, maxBottom: window.innerHeight - 16 - 34 };
-  });
-  if (!startInset || startInset.bottom > startInset.maxBottom + 0.5) {
-    throw new Error(`Start button inside home indicator inset: ${JSON.stringify(startInset)}`);
+  await page.waitForTimeout(300);
+  const startClearance = await buttonBottomClearance(page, ".compare-screen__footer .primary-action");
+  if (startClearance === null || startClearance < 50 - 0.5) {
+    throw new Error(`Start button home-indicator clearance ${startClearance} (need >= 50)`);
   }
 
   await mkdir(resolve(root, "screenshots"), { recursive: true });
@@ -123,20 +120,18 @@ try {
   await page.waitForTimeout(700);
   await page.screenshot({ path: resolve(root, "screenshots/in-route-phone.png") });
 
-  const endInset = await page.evaluate(() => {
-    const button = document.querySelector(".in-route-screen .primary-action");
-    if (!button) return null;
-    const bottom = button.getBoundingClientRect().bottom;
-    return { bottom, maxBottom: window.innerHeight - 16 - 34 };
-  });
-  if (!endInset || endInset.bottom > endInset.maxBottom + 0.5) {
-    throw new Error(`End button inside home indicator inset: ${JSON.stringify(endInset)}`);
+  const endClearance = await buttonBottomClearance(page, ".in-route-screen .primary-action");
+  if (endClearance === null || endClearance < 50 - 0.5) {
+    throw new Error(`End button home-indicator clearance ${endClearance} (need >= 50)`);
   }
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`http://127.0.0.1:${port}`, { waitUntil: "networkidle" });
   await page.waitForFunction(() => window.__shadeway?.places?.length, null, { timeout: 60_000 });
-  const grabberDisplay = await page.evaluate(() => getComputedStyle(document.querySelector(".sheet-grabber")).display);
+  const grabberDisplay = await page.evaluate(() => {
+    const grabber = document.querySelector(".sheet-grabber");
+    return grabber ? getComputedStyle(grabber).display : "missing";
+  });
   if (grabberDisplay !== "none") throw new Error(`desktop grabber display ${grabberDisplay}`);
 
   await page.evaluate((from) => window.__shadeway.pick(from), walk.from);
@@ -162,10 +157,29 @@ try {
       totalBytes: navigationBytes + resourceBytes,
     };
   });
-  console.log(JSON.stringify({ weight, grabberDisplay, suggestionCount }, null, 2));
+  if (consoleIssues.length > 0) {
+    throw new Error(`browser console errors:\n${consoleIssues.join("\n")}`);
+  }
+  console.log(JSON.stringify({ weight, grabberDisplay, suggestionCount, startClearance, endClearance }, null, 2));
   await browser.close();
 } finally {
   server.kill("SIGTERM");
+}
+
+function wireConsoleGuard(page, issues) {
+  page.on("pageerror", (error) => issues.push(`pageerror: ${error}`));
+  page.on("console", (message) => {
+    if (message.type() === "error") issues.push(`console: ${message.text()}`);
+  });
+}
+
+async function buttonBottomClearance(page, selector) {
+  return page.evaluate((query) => {
+    const button = document.querySelector(query);
+    if (!button) return null;
+    const rect = button.getBoundingClientRect();
+    return window.innerHeight - rect.bottom;
+  }, selector);
 }
 
 async function waitFor(url) {
