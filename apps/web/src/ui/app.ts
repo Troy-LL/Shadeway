@@ -8,6 +8,7 @@ import { createNoopMapController } from "./controller-stub";
 import { createRouteClient, nearestNode, type RouteClient } from "./route-client";
 import { manilaNowMinutes, shadeDepartureAvailable, snapToNowSlot } from "./departure-time";
 import { cardsFromResults } from "./route-model";
+import { effectiveRouteWeight } from "./route-selection";
 import { moveRouteSelection, renderCompareContent } from "./screens/compare";
 import { renderInRouteContent } from "./screens/in-route";
 import { renderSearchContent } from "./screens/search";
@@ -26,6 +27,7 @@ function emptyUiState(): UiState {
     detent: "half",
     status: "normal",
     selectedWeight: "shadiest",
+    preferredWeight: "shadiest",
     slot: 12,
     departureIsNow: true,
     routes: [],
@@ -107,6 +109,10 @@ export function createUiApp(
       map.setAlternateRoute(null);
     }
     map.followPosition(false);
+    if (state.start || state.end) {
+      map.setStartMarker(state.start?.at ?? null, state.start?.name);
+      map.setEndMarker(state.end?.at ?? null, state.end?.name);
+    }
   };
 
   const render = () => {
@@ -129,7 +135,13 @@ export function createUiApp(
     if (state.screen === "compare") {
       body.append(
         renderCompareContent(state, {
-          onSelectWeight: (weight) => setState({ selectedWeight: weight }),
+          onSelectWeight: (weight) => {
+            const shadeUnavailable = state.status === "shade-unavailable";
+            setState({
+              preferredWeight: weight,
+              selectedWeight: effectiveRouteWeight(weight, shadeUnavailable),
+            });
+          },
           onSlotChange: (slot) => {
             if (!isSlotIndex(slot)) return;
             if (!live) {
@@ -193,8 +205,8 @@ export function createUiApp(
         onToQuery: (query) => setState({ toQuery: query, query, focusedField: "to", editingField: true }),
         onSwap: () => {
           if (!state.start && !state.end) return;
-          map.setStartMarker(state.end?.at ?? null);
-          map.setEndMarker(state.start?.at ?? null);
+          map.setStartMarker(state.end?.at ?? null, state.end?.name);
+          map.setEndMarker(state.start?.at ?? null, state.start?.name);
           setState({
             start: state.end,
             end: state.start,
@@ -246,7 +258,7 @@ export function createUiApp(
     map.setPilotBox(false);
     const field = state.focusedField;
     if (field === "from" || !state.start) {
-      map.setStartMarker(place.at);
+      map.setStartMarker(place.at, place.name);
       setState({
         start: place,
         fromQuery: place.name,
@@ -259,7 +271,7 @@ export function createUiApp(
       });
       return;
     }
-    map.setEndMarker(place.at);
+    map.setEndMarker(place.at, place.name);
     setState({
       end: place,
       toQuery: place.name,
@@ -299,7 +311,7 @@ export function createUiApp(
       const sunDown = sun.elevationDeg <= 0;
       const outsideHours = state.departureIsNow && !shadeDepartureAvailable(manilaNowMinutes());
       const shadeUnavailable = sunDown || outsideHours;
-      const selectedWeight = shadeUnavailable ? "fastest" : state.selectedWeight;
+      const selectedWeight = effectiveRouteWeight(state.preferredWeight, shadeUnavailable);
       const picked = cards.find((card) => card.weight === selectedWeight) ?? cards[0];
       if (!picked) return;
       const screen = state.screen === "in-route" ? "in-route" : "compare";

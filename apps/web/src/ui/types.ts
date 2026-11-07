@@ -45,6 +45,7 @@ export interface UiState {
   readonly detent: SheetDetent;
   readonly status: UiStatus;
   readonly selectedWeight: RouteWeight;
+  readonly preferredWeight: RouteWeight;
   readonly slot: SlotIndex;
   readonly departureIsNow: boolean;
   readonly routes: readonly RouteCardModel[];

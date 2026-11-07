@@ -39,7 +39,8 @@ Flat 2D Shadeway UI per ENG-021. Mobile-first at 390x844, desktop side panel at 
 
 ## Map
 
-- Flat basemap, building footprints near the route, optional shadow fill polygons (off by default via a Shadows map control), sun/shade route styling per ENG-021 tokens.
+- Flat basemap, building footprints near the route, optional shadows (fill plus estimated edge only when on; all shadow layers off by default via the Shadows map control), sun/shade route styling per ENG-021 tokens.
+- Phone sheet heights use content stacks (96 / 164 / 420 / 268) plus `env(safe-area-inset-bottom)` once via `--safe-bottom`.
 - No place-name labels on the map; start and end markers and attribution stay.
 - Pitch and bearing 0; rotation locked.
 

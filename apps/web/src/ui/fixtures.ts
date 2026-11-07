@@ -36,6 +36,7 @@ export function defaultUiState(overrides: Partial<UiState> = {}): UiState {
     detent: "half",
     status: "normal",
     selectedWeight: "shadiest",
+    preferredWeight: "shadiest",
     slot: 12,
     departureIsNow: true,
     routes: DEMO_ROUTES,

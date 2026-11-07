@@ -30,6 +30,7 @@ export const UI_STYLES = `
   --motion-sheet: 240ms;
   --touch-min: 44px;
   --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -89,16 +90,15 @@ export const UI_STYLES = `
   transition: height var(--motion-sheet) cubic-bezier(0.32, 0.72, 0, 1);
   pointer-events: auto;
   max-height: min(62dvh, calc(100dvh - var(--safe-top) - 48px));
-  padding-bottom: env(safe-area-inset-bottom, 0px);
   box-shadow: 0 -4px 24px rgba(17, 20, 24, 0.08);
 }
 
 .shadeway-sheet[data-screen='search'][data-detent='peek'] {
-  height: calc(130px + env(safe-area-inset-bottom, 0px));
+  height: calc(96px + var(--safe-bottom));
 }
 
 .shadeway-sheet[data-screen='search'][data-detent='half'] {
-  height: calc(198px + env(safe-area-inset-bottom, 0px));
+  height: calc(164px + var(--safe-bottom));
 }
 
 .shadeway-sheet[data-screen='search'][data-editing='true'] {
@@ -107,12 +107,12 @@ export const UI_STYLES = `
 }
 
 .shadeway-sheet[data-screen='compare'] {
-  height: min(62dvh, calc(454px + env(safe-area-inset-bottom, 0px)));
+  height: min(62dvh, calc(420px + var(--safe-bottom)));
 }
 
 .shadeway-sheet[data-screen='in-route'] {
-  height: calc(302px + env(safe-area-inset-bottom, 0px));
-  max-height: calc(302px + env(safe-area-inset-bottom, 0px));
+  height: calc(268px + var(--safe-bottom));
+  max-height: calc(268px + var(--safe-bottom));
 }
 
 @media (min-width: 900px) {
@@ -121,7 +121,7 @@ export const UI_STYLES = `
     right: auto;
     width: 384px;
     top: 16px;
-    bottom: 16px;
+    bottom: auto;
     height: auto;
     max-height: calc(100dvh - 32px);
     border-radius: var(--radius-sheet);
@@ -183,9 +183,16 @@ export const UI_STYLES = `
 
 .search-fields {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr var(--touch-min);
   gap: var(--space-2);
-  align-items: center;
+  align-items: stretch;
+}
+
+.search-fields__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .search-field {
@@ -303,7 +310,7 @@ export const UI_STYLES = `
   border-radius: var(--radius-card);
   border: 2px solid var(--color-border);
   padding: var(--space-3);
-  background: var(--color-surface-step);
+  background: var(--color-surface);
   min-height: 88px;
   text-align: left;
   width: 100%;

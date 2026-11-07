@@ -28,6 +28,10 @@ function rankPlace(name: string): number {
   return PILOT_RANK.get(name.toLowerCase()) ?? 2;
 }
 
+function restingPlaces(places: readonly PlacePick[]): readonly PlacePick[] {
+  return [...places].sort((a, b) => rankPlace(a.name) - rankPlace(b.name) || a.name.localeCompare(b.name)).slice(0, 5);
+}
+
 export function renderSearchContent(state: UiState, handlers: SearchHandlers): HTMLElement {
   const container = document.createElement("div");
   container.className = "search-screen";
@@ -41,6 +45,8 @@ export function renderSearchContent(state: UiState, handlers: SearchHandlers): H
 
   const row = document.createElement("div");
   row.className = "search-fields";
+  const stack = document.createElement("div");
+  stack.className = "search-fields__stack";
 
   const from = document.createElement("input");
   from.className = "search-field";
@@ -52,13 +58,6 @@ export function renderSearchContent(state: UiState, handlers: SearchHandlers): H
   if (state.focusedField === "from") from.classList.add("search-field--active");
   from.addEventListener("focus", () => handlers.onFocusField("from"));
   from.addEventListener("input", () => handlers.onFromQuery(from.value));
-
-  const swap = document.createElement("button");
-  swap.type = "button";
-  swap.className = "search-swap";
-  swap.setAttribute("aria-label", COPY.swap);
-  swap.textContent = "⇅";
-  swap.addEventListener("click", handlers.onSwap);
 
   const to = document.createElement("input");
   to.className = "search-field";
@@ -77,12 +76,20 @@ export function renderSearchContent(state: UiState, handlers: SearchHandlers): H
     handlers.onPick(first);
   });
 
-  row.append(from, swap, to);
+  const swap = document.createElement("button");
+  swap.type = "button";
+  swap.className = "search-swap";
+  swap.setAttribute("aria-label", COPY.swap);
+  swap.textContent = "⇅";
+  swap.addEventListener("click", handlers.onSwap);
+
+  stack.append(from, to);
+  row.append(stack, swap);
   container.append(row);
 
   const query = state.focusedField === "from" ? state.fromQuery : state.toQuery;
-  const matches = state.editingField ? matchPlaces(state.places, query) : [];
-  if (matches.length > 0) {
+  const matches = state.editingField ? matchPlaces(state.places, query) : restingPlaces(state.places);
+  if (matches.length > 0 && (state.editingField || !query.trim())) {
     const list = document.createElement("div");
     list.className = "suggest";
     list.setAttribute("role", "listbox");

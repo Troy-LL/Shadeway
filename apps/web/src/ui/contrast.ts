@@ -37,4 +37,7 @@ export const TOKEN_HEX = {
   accentLight: "#0066CC",
   textOnAccentDark: "#0B1220",
   accentDark: "#409CFF",
+  inactiveRouteDark: "#A3ACB6",
+  roadDark: "#4A5562",
+  landDark: "#14181D",
 } as const;

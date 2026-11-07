@@ -30,8 +30,8 @@ export interface MapController {
   fitRoute(): void;
   followPosition(enabled: boolean): void;
   setFollowFraction(fraction: number): void;
-  setStartMarker(position: LngLat | null): void;
-  setEndMarker(position: LngLat | null): void;
+  setStartMarker(position: LngLat | null, label?: string): void;
+  setEndMarker(position: LngLat | null, label?: string): void;
   setPilotBox(visible: boolean): void;
   whenReady(): Promise<PilotData | null>;
   subscribeMapTap(listener: (position: LngLat) => void): () => void;
@@ -73,6 +73,8 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
   let followFraction = 0;
   let start: LngLat | null = null;
   let end: LngLat | null = null;
+  let startLabel = "";
+  let endLabel = "";
 
   const attribution = document.createElement("div");
   attribution.className = "shadeway-attribution";
@@ -133,13 +135,15 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
       followFraction = Math.min(1, Math.max(0, fraction));
       if (following) moveCamera(false);
     },
-    setStartMarker(position) {
+    setStartMarker(position, label) {
       start = position;
-      view.setMarkers(start, end);
+      if (label !== undefined) startLabel = label;
+      view.setMarkers(start, end, { startLabel, endLabel });
     },
-    setEndMarker(position) {
+    setEndMarker(position, label) {
       end = position;
-      view.setMarkers(start, end);
+      if (label !== undefined) endLabel = label;
+      view.setMarkers(start, end, { startLabel, endLabel });
     },
     setPilotBox(visible) {
       if (!visible || !pilot) {
@@ -276,9 +280,18 @@ function renderShadowToggle(onChange: (next: boolean) => void): HTMLButtonElemen
 }
 
 function paintShadowToggle(button: HTMLButtonElement, visible: boolean): void {
-  button.textContent = MAP_SHADOWS_LABEL;
-  button.setAttribute("aria-label", MAP_SHADOWS_LABEL);
+  button.replaceChildren();
+  const text = document.createElement("span");
+  text.className = "shadeway-shadow-toggle__label";
+  text.textContent = MAP_SHADOWS_LABEL;
+  const mark = document.createElement("span");
+  mark.className = "shadeway-shadow-toggle__mark";
+  mark.textContent = visible ? "✓" : "○";
+  mark.setAttribute("aria-hidden", "true");
+  button.append(text, mark);
+  button.setAttribute("aria-label", `${MAP_SHADOWS_LABEL}, ${visible ? "on" : "off"}`);
   button.setAttribute("aria-pressed", visible ? "true" : "false");
+  button.dataset.on = visible ? "true" : "false";
 }
 
 function overviewCamera(): CameraMove {
@@ -456,35 +469,49 @@ const MAP_CSS = `
 .shadeway-map-message code {
   font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
-.shadeway-marker {
-  width: 16px;
-  height: 16px;
+.shadeway-marker--start {
+  width: 18px;
+  height: 18px;
   border-radius: 999px;
-  border: 2px solid #fff;
+  border: 3px solid #14202b;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px #ffffff, 0 1px 3px rgba(20, 32, 43, 0.35);
+}
+.shadeway-marker--end {
+  width: 18px;
+  height: 18px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  border: 2px solid #ffffff;
+  background: #0a84ff;
   box-shadow: 0 1px 3px rgba(20, 32, 43, 0.35);
 }
-.shadeway-marker--start { background: #14202b; }
-.shadeway-marker--end { background: #0a84ff; }
 .shadeway-shadow-toggle {
   position: absolute;
   z-index: 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   min-width: 44px;
   min-height: 44px;
   padding: 0 12px;
-  border: 0;
+  border: 1px solid #c9ced4;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.96);
   color: #14202b;
   box-shadow: 0 1px 4px rgba(20, 32, 43, 0.18);
   font: 600 13px/1 system-ui, -apple-system, 'Segoe UI', sans-serif;
   cursor: pointer;
 }
+.shadeway-shadow-toggle__mark {
+  font-size: 14px;
+  line-height: 1;
+}
 .shadeway-shadow-toggle[aria-pressed='true'] {
   background: #0066cc;
   color: #fff;
+  border-color: #0066cc;
 }
 @media (prefers-color-scheme: dark) {
   .shadeway-attribution, .shadeway-map-message, .shadeway-attribution__full {
@@ -492,12 +519,14 @@ const MAP_CSS = `
     color: #f5f7fa;
   }
   .shadeway-shadow-toggle {
-    background: rgba(28, 32, 38, 0.92);
+    background: rgba(28, 32, 38, 0.96);
     color: #f5f7fa;
+    border-color: #3a414a;
   }
   .shadeway-shadow-toggle[aria-pressed='true'] {
     background: #409cff;
     color: #0b1220;
+    border-color: #409cff;
   }
 }
 `;

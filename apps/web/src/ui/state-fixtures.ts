@@ -15,6 +15,7 @@ export const UI_STATE_FIXTURES: Record<string, UiState> = {
     detent: "half",
     status: "shade-unavailable",
     selectedWeight: "fastest",
+    preferredWeight: "shadiest",
     routes: [
       {
         weight: "fastest",

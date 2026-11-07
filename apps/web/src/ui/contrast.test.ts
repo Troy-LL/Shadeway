@@ -11,6 +11,11 @@ describe("token contrast", () => {
     expect(contrastRatio(TOKEN_HEX.textOnAccentLight, TOKEN_HEX.accentLight)).toBeGreaterThanOrEqual(4.5);
   });
 
+  it("meets 3:1 for the inactive route line on dark roads and land", () => {
+    expect(contrastRatio(TOKEN_HEX.inactiveRouteDark, TOKEN_HEX.roadDark)).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(TOKEN_HEX.inactiveRouteDark, TOKEN_HEX.landDark)).toBeGreaterThanOrEqual(3);
+  });
+
   it("meets AA contrast on dark surfaces", () => {
     expect(contrastRatio(TOKEN_HEX.textOnDark, TOKEN_HEX.surfaceDark)).toBeGreaterThanOrEqual(MIN_CONTRAST);
     expect(contrastRatio(TOKEN_HEX.textSecondaryOnDark, TOKEN_HEX.surfaceDark)).toBeGreaterThanOrEqual(MIN_CONTRAST);

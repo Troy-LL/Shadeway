@@ -19,7 +19,8 @@ const SHADE_LINE_DARK = [58, 160, 179, 255] as const;
 const CASING_LIGHT = [20, 32, 43, 255] as const;
 const CASING_DARK = [255, 255, 255, 255] as const;
 const INACTIVE_LIGHT = [122, 131, 140, 255] as const;
-const INACTIVE_DARK = [107, 116, 126, 255] as const;
+const INACTIVE_DARK = [163, 172, 182, 255] as const;
+const INACTIVE_CASING_DARK = [20, 24, 29, 255] as const;
 const BUILDING_LIGHT = [228, 222, 211, 255] as const;
 const BUILDING_DARK = [34, 39, 46, 255] as const;
 const TICK = SHADE_LINE;
@@ -50,7 +51,11 @@ export interface MapView {
     camera: CameraMove,
     durationMs: number,
   ): void;
-  setMarkers(start: LngLat | null, end: LngLat | null): void;
+  setMarkers(
+    start: LngLat | null,
+    end: LngLat | null,
+    labels?: { readonly startLabel?: string; readonly endLabel?: string },
+  ): void;
   setOutline(ring: readonly LngLat[] | null): void;
   onTap(listener: (position: LngLat) => void): void;
 }
@@ -60,6 +65,7 @@ const SCENE_SOURCES = [
   "shadows",
   "shadow-edge",
   "shadow-edge-estimated",
+  "route-inactive-casing",
   "route-inactive",
   "route-casing",
   "route-sun",
@@ -155,6 +161,13 @@ export function createMapLibreView(root: HTMLElement): MapView {
       type: "line",
       source: "shadow-edge-estimated",
       paint: { "line-color": rgba(EDGE_EST), "line-width": 1, "line-dasharray": [3, 2] },
+    });
+    map.addLayer({
+      id: "route-inactive-casing",
+      type: "line",
+      source: "route-inactive",
+      layout: { "line-cap": "round", "line-join": "round", visibility: "none" },
+      paint: { "line-color": rgba(INACTIVE_CASING_DARK), "line-width": 7 },
     });
     map.addLayer({
       id: "route-inactive",
@@ -266,9 +279,9 @@ export function createMapLibreView(root: HTMLElement): MapView {
         ),
       );
     },
-    setMarkers(start, end) {
-      startMarker = placeMarker(map, startMarker, start, "start");
-      endMarker = placeMarker(map, endMarker, end, "end");
+    setMarkers(start, end, labels) {
+      startMarker = placeMarker(map, startMarker, start, "start", labels?.startLabel);
+      endMarker = placeMarker(map, endMarker, end, "end", labels?.endLabel);
     },
     setOutline(ring) {
       const data =
@@ -313,8 +326,14 @@ function applyScene(scene: MapScene): void {
   setSourceData(map, "route-shade-casing", linesCollection(scene.route.shaded));
   setSourceData(map, "route-shade", linesCollection(scene.route.shaded));
   setSourceData(map, "route-ticks", linesCollection(scene.route.ticks));
-  if (map.getLayer("shadows")) {
-    map.setLayoutProperty("shadows", "visibility", scene.showShadowFill ? "visible" : "none");
+  const shadowOn = scene.showShadowFill;
+  for (const id of ["shadows", "shadow-edge", "shadow-edge-estimated"] as const) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
+  }
+  if (shadowOn) {
+    if (map.getLayer("shadows")) map.setLayoutProperty("shadows", "visibility", "visible");
+    if (map.getLayer("shadow-edge")) map.setLayoutProperty("shadow-edge", "visibility", "none");
+    if (map.getLayer("shadow-edge-estimated")) map.setLayoutProperty("shadow-edge-estimated", "visibility", "visible");
   }
 }
 
@@ -367,6 +386,10 @@ function paintSceneColors(): void {
   }
   if (map.getLayer("shadow-edge")) map.setPaintProperty("shadow-edge", "line-color", rgba(colors.edge));
   if (map.getLayer("shadow-edge-estimated")) map.setPaintProperty("shadow-edge-estimated", "line-color", rgba(colors.edgeEst));
+  if (map.getLayer("route-inactive-casing")) {
+    map.setPaintProperty("route-inactive-casing", "line-color", rgba(INACTIVE_CASING_DARK));
+    map.setLayoutProperty("route-inactive-casing", "visibility", colors.dark ? "visible" : "none");
+  }
   if (map.getLayer("route-inactive")) map.setPaintProperty("route-inactive", "line-color", rgba(colors.inactive));
   if (map.getLayer("route-casing")) map.setPaintProperty("route-casing", "line-color", rgba(colors.casing));
   if (map.getLayer("route-shade-casing")) map.setPaintProperty("route-shade-casing", "line-color", rgba(colors.casing));
@@ -425,12 +448,20 @@ function easeOptions(camera: CameraMove, durationMs: number): EaseToOptions {
   return options;
 }
 
-function placeMarker(map: Map, current: Marker | null, position: LngLat | null, kind: "start" | "end"): Marker | null {
+function placeMarker(
+  map: Map,
+  current: Marker | null,
+  position: LngLat | null,
+  kind: "start" | "end",
+  label?: string,
+): Marker | null {
   current?.remove();
   if (!position) return null;
   const element = document.createElement("div");
   element.className = kind === "start" ? "shadeway-marker shadeway-marker--start" : "shadeway-marker shadeway-marker--end";
-  return new Marker({ element }).setLngLat([position[0], position[1]]).addTo(map);
+  element.setAttribute("role", "img");
+  if (label) element.setAttribute("aria-label", label);
+  return new Marker({ element, anchor: kind === "end" ? "bottom" : "center" }).setLngLat([position[0], position[1]]).addTo(map);
 }
 
 function isGeoJsonSource(source: unknown): source is GeoJSONSource {

@@ -1,4 +1,5 @@
 import { COPY, ROUTE_ESTIMATE_LABEL, formatDistanceM, formatMinutes, formatMinutesInSun } from "../copy";
+import { formatDepartureChip } from "../departure-time";
 import type { UiState } from "../types";
 
 export interface InRouteHandlers {
@@ -12,7 +13,8 @@ export function renderInRouteContent(state: UiState, handlers: InRouteHandlers):
 
   const status = document.createElement("p");
   status.className = "in-route-screen__status";
-  status.textContent = COPY.routeOverview;
+  const leave = formatDepartureChip(state.departureIsNow, state.slot);
+  status.textContent = `${COPY.routeOverview} · ${leave}`;
 
   const sun = document.createElement("p");
   sun.className = "in-route-screen__sun";
