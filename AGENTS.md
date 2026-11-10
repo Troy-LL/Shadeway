@@ -22,3 +22,7 @@ Never:
 - Do not use a dataset with a non-commercial license.
 
 Park thinking in `scratch/`. Do not map it, even if they asked. Do not commit it.
+
+## Handoff
+
+Work from the GitHub issue (Problem, Acceptance criteria, Owner, Budget, Out of scope). Plan and build to its acceptance criteria. If the spec is wrong, comment on the issue instead of guessing. Commit as Troy-LL. Commits, PR bodies, code and docs carry no co-author trailers, no tool or model names and no generated-by footers.
