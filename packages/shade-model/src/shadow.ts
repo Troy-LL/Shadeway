@@ -390,31 +390,33 @@ function parameterOnSegment(a: Local, b: Local, c: Local, d: Local): number | nu
   return Math.min(1, Math.max(0, t));
 }
 
-function shadedLength(a: Local, b: Local, rings: readonly (readonly Local[])[]): number {
+function segmentSunLength(a: Local, b: Local, origin: LngLat, shadows: readonly ShadowPolygon[]): number {
   const length = Math.hypot(b.x - a.x, b.y - a.y);
   if (length === 0) return 0;
+  const rings = shadows.filter((shadow) => shadow.ring.length >= 3);
   const parameters = [0, 1];
-  for (const ring of rings) {
-    for (let i = 0; i < ring.length; i++) {
-      const c = ring[i];
-      const d = ring[(i + 1) % ring.length];
+  for (const shadow of rings) {
+    const local = shadow.ring.map((point) => toLocal(origin, point));
+    for (let i = 0; i < local.length; i++) {
+      const c = local[i];
+      const d = local[(i + 1) % local.length];
       if (c === undefined || d === undefined) continue;
       const t = parameterOnSegment(a, b, c, d);
       if (t !== null) parameters.push(t);
     }
   }
   parameters.sort((p, q) => p - q);
-  let shaded = 0;
+  let sunLength = 0;
   let previous = 0;
   for (const t of parameters) {
     if (t - previous < 1e-10) continue;
     const mid = (previous + t) / 2;
     const x = a.x + (b.x - a.x) * mid;
     const y = a.y + (b.y - a.y) * mid;
-    if (rings.some((ring) => pointInRing(ring, x, y))) shaded += (t - previous) * length;
+    sunLength += (t - previous) * length * pointSunFraction(fromLocal(origin, { x, y }), shadows);
     previous = t;
   }
-  return shaded;
+  return sunLength;
 }
 
 export function edgeSunFraction(edge: Edge, shadows: readonly ShadowPolygon[], sun: SunPosition): number | null {
@@ -423,26 +425,6 @@ export function edgeSunFraction(edge: Edge, shadows: readonly ShadowPolygon[], s
   if (origin === undefined) return null;
   const line = edge.geometry.map((point) => toLocal(origin, point));
   if (line.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) return null;
-  const treeShadows = shadows.filter((shadow) => shadow.kind === "tree");
-  if (treeShadows.length === 0) {
-    const buildingShadows = shadows.filter((shadow) => shadow.kind !== "tree");
-    const rings = buildingShadows
-      .filter((shadow) => shadow.ring.length >= 3)
-      .map((shadow) => shadow.ring.map((point) => toLocal(origin, point)));
-    let total = 0;
-    let sunLength = 0;
-    for (let i = 0; i < line.length - 1; i++) {
-      const a = line[i];
-      const b = line[i + 1];
-      if (a === undefined || b === undefined) continue;
-      const length = Math.hypot(b.x - a.x, b.y - a.y);
-      if (length === 0) continue;
-      total += length;
-      sunLength += length - shadedLength(a, b, rings);
-    }
-    if (!(total > 0)) return null;
-    return Math.min(1, Math.max(0, sunLength / total));
-  }
   let total = 0;
   let sunLength = 0;
   for (let i = 0; i < line.length - 1; i++) {
@@ -452,16 +434,7 @@ export function edgeSunFraction(edge: Edge, shadows: readonly ShadowPolygon[], s
     const length = Math.hypot(b.x - a.x, b.y - a.y);
     if (length === 0) continue;
     total += length;
-    const samples = Math.max(4, Math.ceil(length / 2));
-    for (let s = 0; s < samples; s += 1) {
-      const t0 = s / samples;
-      const t1 = (s + 1) / samples;
-      const span = (t1 - t0) * length;
-      const mid = (t0 + t1) / 2;
-      const x = a.x + (b.x - a.x) * mid;
-      const y = a.y + (b.y - a.y) * mid;
-      sunLength += span * pointSunFraction(fromLocal(origin, { x, y }), shadows);
-    }
+    sunLength += segmentSunLength(a, b, origin, shadows);
   }
   if (!(total > 0)) return null;
   return Math.min(1, Math.max(0, sunLength / total));

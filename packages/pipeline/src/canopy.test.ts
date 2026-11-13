@@ -6,6 +6,7 @@ import { expect, test } from "vitest";
 import {
   CANOPY_HEIGHT_THRESHOLD_M,
   canopyCrownRetention,
+  MAX_CROWN_PATCH_AREA_M2,
   countCanopyPixels,
   crownsFromGrid,
   loadCanopyGrid,
@@ -126,3 +127,37 @@ test("checkerboard canopy keeps at least 90% of eligible pixels in crowns", () =
   expect(crowns.length).toBeGreaterThan(0);
   expect(canopyCrownRetention(grid, crowns)).toBeGreaterThanOrEqual(0.9);
 });
+
+test("splits a flat 100x100 m plateau so no crown exceeds 2,000 m2", () => {
+  const origin = toWebMercator(121.05, 14.552);
+  const size = 100;
+  const values = new Float32Array(size * size).fill(9);
+  const grid = {
+    originX: origin.x,
+    originY: origin.y + size,
+    pixelSizeX: 1,
+    pixelSizeY: 1,
+    width: size,
+    height: size,
+    values,
+    box: { minX: origin.x, minY: origin.y, maxX: origin.x + size, maxY: origin.y + size },
+  };
+  const crowns = crownsFromGrid(grid, 0.35);
+  expect(crowns.length).toBeGreaterThan(1);
+  const areas = crowns.map((crown) => crownAreaM2(crown.footprint));
+  expect(Math.max(...areas)).toBeLessThanOrEqual(MAX_CROWN_PATCH_AREA_M2);
+  expect(canopyCrownRetention(grid, crowns)).toBeGreaterThanOrEqual(0.9);
+});
+
+function crownAreaM2(ring: readonly { 0: number; 1: number }[] | readonly [number, number][]): number {
+  if (ring.length < 3) return 0;
+  const mercator = ring.map((point) => toWebMercator(point[0], point[1]));
+  let area = 0;
+  for (let i = 0; i < mercator.length; i += 1) {
+    const a = mercator[i];
+    const b = mercator[(i + 1) % mercator.length];
+    if (!a || !b) continue;
+    area += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(area) / 2;
+}

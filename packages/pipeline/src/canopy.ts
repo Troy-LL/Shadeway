@@ -222,21 +222,46 @@ function splitOversizedPatches(grid: CanopyGrid, mask: Uint8Array, labels: Int32
       byLabel.set(label, list);
     }
   }
-  for (const [label, cells] of byLabel) {
-    if (cells.length * pixelArea <= MAX_CROWN_PATCH_AREA_M2) continue;
-    const peaks = localMaxima(grid, mask, cells);
-    if (peaks.length === 0 || peaks.length === cells.length) continue;
-    const seeds = peaks.length > 1 ? peaks : gridSeeds(grid, cells, pixelArea);
-    const assignments = voronoiBySeeds(cells, seeds, grid);
-    for (const [subKey, subset] of assignments) {
-      const subLabel = next;
-      next += 1;
-      for (const cell of subset) {
-        out[cell.row * grid.width + cell.col] = subLabel;
+  const collect = (): Map<number, { row: number; col: number }[]> => {
+    const grouped = new Map<number, { row: number; col: number }[]>();
+    for (let row = 0; row < grid.height; row += 1) {
+      for (let col = 0; col < grid.width; col += 1) {
+        const index = row * grid.width + col;
+        const label = out[index] ?? 0;
+        if (label === 0) continue;
+        const list = grouped.get(label) ?? [];
+        list.push({ row, col });
+        grouped.set(label, list);
       }
-      void subKey;
-      void label;
     }
+    return grouped;
+  };
+
+  let grouped = byLabel;
+  for (let pass = 0; pass < 8; pass += 1) {
+    let split = false;
+    for (const [, cells] of grouped) {
+      if (cells.length * pixelArea <= MAX_CROWN_PATCH_AREA_M2) continue;
+      const peaks = localMaxima(grid, mask, cells);
+      const usePeaks = peaks.length > 1 && peaks.length < cells.length;
+      let seeds = usePeaks ? peaks : gridSeeds(grid, cells, pixelArea);
+      let assignments = voronoiBySeeds(cells, seeds, grid);
+      if (assignments.size < 2) {
+        seeds = gridSeeds(grid, cells, pixelArea);
+        assignments = voronoiBySeeds(cells, seeds, grid);
+      }
+      if (assignments.size < 2) continue;
+      for (const subset of assignments.values()) {
+        const subLabel = next;
+        next += 1;
+        for (const cell of subset) {
+          out[cell.row * grid.width + cell.col] = subLabel;
+        }
+      }
+      split = true;
+    }
+    if (!split) break;
+    grouped = collect();
   }
   return out;
 }
