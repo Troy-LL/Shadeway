@@ -1,10 +1,11 @@
 import type { RouteWeight } from "@shadeway/contract";
 import {
   COPY,
-  ROUTE_ESTIMATE_LABEL,
+  TREE_DATA_OUT_OF_DATE,
   formatDistanceM,
   formatMinutes,
   formatMinutesInSun,
+  routeEstimateLabel,
 } from "../copy";
 import {
   manilaNowMinutes,
@@ -71,7 +72,9 @@ export function renderCompareContent(state: UiState, handlers: CompareHandlers):
   );
   const badge = document.createElement("span");
   badge.className = "confidence-badge";
-  badge.textContent = "Estimate";
+  badge.textContent = state.routes.some((route) => route.confidence === "Estimate + canopy")
+    ? "Estimate + canopy"
+    : "Estimate";
   chips.append(badge);
   header.append(back, chips);
   container.append(header);
@@ -135,8 +138,14 @@ export function renderCompareContent(state: UiState, handlers: CompareHandlers):
   footer.className = "compare-screen__footer";
   const estimate = document.createElement("p");
   estimate.className = "sheet-estimate-label";
-  estimate.textContent = ROUTE_ESTIMATE_LABEL;
+  estimate.textContent = routeEstimateLabel(state.canopyLoaded);
   footer.append(estimate);
+  if (state.canopyLoaded) {
+    const treeAge = document.createElement("p");
+    treeAge.className = "sheet-tree-age-label";
+    treeAge.textContent = TREE_DATA_OUT_OF_DATE;
+    footer.append(treeAge);
+  }
 
   if (state.status === "normal" || state.status === "shade-unavailable") {
     const start = document.createElement("button");

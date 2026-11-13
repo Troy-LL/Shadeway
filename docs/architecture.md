@@ -69,7 +69,7 @@ Scope: BGC, building shadows plus covered and bridge handling, flat 2D route wit
 - 3 screens exist: Search, Compare, In-route, with the states in [design.md](design.md).
 - Shadow polygons and tile values agree on every fixture edge, 0 fixture edges differ by more than 0.10 sun fraction.
 - Initial page load plus pilot tiles transfer 5 MB or less.
-- 20 walked segments are logged and scored. The README states the match rate, or states that no rate is claimed yet. The label "Building-only estimate, no trees" is on the three Compare cards and the In-route sheet.
+- 20 walked segments are logged and scored. The README states the match rate, or states that no rate is claimed yet. The compare and in-route sheets show the approved estimate label from decision 002 (building-only or building plus satellite tree map, matching loaded tiles).
 
 Counted on 2026-10-26: 6 of 8 met. Those six are engineering bars. `build:pilot` has not run in CI, so that engineering bar is unmet. The only truth bar is 20 walked segments scored, and it is unmet. README states that no match rate is claimed.
 

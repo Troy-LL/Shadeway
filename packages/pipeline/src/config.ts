@@ -67,3 +67,11 @@ export const pilotWalks: readonly {
     note: "OSM way 613886961, highway=footway, bridge=viaduct, layer=1. An overpass.",
   },
 ];
+
+/** Demo tree-lined walk for route sun-minute metrics in the build report. */
+export const routeMetricsCheck = {
+  date: "2026-10-26",
+  minutes: 12 * 60,
+  from: pilotWalks[1]!.from,
+  to: pilotWalks[1]!.to,
+} as const;

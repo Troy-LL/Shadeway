@@ -4,6 +4,7 @@ import { runDemo } from "./demo";
 import { loadPilot, PilotDataMissing, type PilotData } from "./pilot";
 import {
   buildingsNearRoute,
+  treesNearRoute,
   paintRoute,
   pointAlong,
   routeBounds,
@@ -227,7 +228,8 @@ export function createMapController(root: HTMLElement, options: MapControllerOpt
     const coordinates = stored.get(activeWeight) ?? [];
     const sun = shadeModel.sunPosition({ date, minutes: slotStartMinutes(slot) }, BGC);
     const near = coordinates.length >= 2 ? buildingsNearRoute(pilot.buildings, coordinates, 280) : [];
-    const shadows = shadowDraws(near, sun);
+    const nearTrees = coordinates.length >= 2 ? treesNearRoute(pilot.trees, coordinates, 280) : [];
+    const shadows = shadowDraws(near, nearTrees, sun);
     const route = coordinates.length >= 2 ? paintRoute(coordinates, pilot.graph.edges, shadows) : EMPTY_ROUTE;
     const buildingRings = near.map((building) => building.footprint);
     view.setScene({

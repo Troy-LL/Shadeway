@@ -1,4 +1,12 @@
-import { isEstimatedHeight, type Building, type Edge, type LngLat, type ShadowPolygon, type SunPosition } from "@shadeway/contract";
+import {
+  isEstimatedHeight,
+  type Building,
+  type Edge,
+  type LngLat,
+  type ShadowPolygon,
+  type SunPosition,
+  type TreeCaster,
+} from "@shadeway/contract";
 
 const EARTH_EQUATOR_M = 6378137;
 const METERS_PER_DEG_LAT = (Math.PI * EARTH_EQUATOR_M) / 180;
@@ -310,21 +318,63 @@ export function shadowPolygons(buildings: readonly Building[], sun: SunPosition)
       buildingId: building.id,
       ring: shadowRing(footprint, offset),
       estimated: isEstimatedHeight(building.heightSource),
+      kind: "building" as const,
     };
   });
 }
 
-export function isInShadow(point: LngLat, shadows: readonly ShadowPolygon[]): boolean {
-  if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) return false;
+export function treeShadowPolygons(trees: readonly TreeCaster[], sun: SunPosition): ShadowPolygon[] {
+  if (!sunUp(sun)) return [];
+  return trees.flatMap((tree) => {
+    const footprint = cleanLngRing(tree.footprint);
+    if (footprint.length < 3) return [];
+    const height = tree.crownHeightM;
+    const offset = Number.isFinite(height) && height > 0 ? shadowOffset(height, sun) : { x: 0, y: 0 };
+    const ring = shadowRing(footprint, offset);
+    if (ring.length < 3) return [];
+    const transmittance = clamp01(tree.transmittance);
+    return [
+      {
+        buildingId: tree.id,
+        ring,
+        estimated: true,
+        kind: "tree" as const,
+        transmittance,
+      },
+    ];
+  });
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, value));
+}
+
+function pointInsideShadow(point: LngLat, shadow: ShadowPolygon): boolean {
+  if (shadow.ring.length < 3) return false;
+  const origin = shadow.ring[0];
+  if (origin === undefined) return false;
+  const local = shadow.ring.map((vertex) => toLocal(origin, vertex));
+  const query = toLocal(origin, point);
+  return pointInRing(local, query.x, query.y);
+}
+
+export function pointSunFraction(point: LngLat, shadows: readonly ShadowPolygon[]): number {
+  if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) return 1;
+  let sun = 1;
   for (const shadow of shadows) {
-    if (shadow.ring.length < 3) continue;
-    const origin = shadow.ring[0];
-    if (origin === undefined) continue;
-    const local = shadow.ring.map((vertex) => toLocal(origin, vertex));
-    const query = toLocal(origin, point);
-    if (pointInRing(local, query.x, query.y)) return true;
+    if (!pointInsideShadow(point, shadow)) continue;
+    if (shadow.kind === "tree") {
+      sun = Math.min(sun, shadow.transmittance ?? 0);
+      continue;
+    }
+    return 0;
   }
-  return false;
+  return sun;
+}
+
+export function isInShadow(point: LngLat, shadows: readonly ShadowPolygon[]): boolean {
+  return pointSunFraction(point, shadows) < 0.5;
 }
 
 function parameterOnSegment(a: Local, b: Local, c: Local, d: Local): number | null {
@@ -340,31 +390,33 @@ function parameterOnSegment(a: Local, b: Local, c: Local, d: Local): number | nu
   return Math.min(1, Math.max(0, t));
 }
 
-function shadedLength(a: Local, b: Local, rings: readonly (readonly Local[])[]): number {
+function segmentSunLength(a: Local, b: Local, origin: LngLat, shadows: readonly ShadowPolygon[]): number {
   const length = Math.hypot(b.x - a.x, b.y - a.y);
   if (length === 0) return 0;
+  const rings = shadows.filter((shadow) => shadow.ring.length >= 3);
   const parameters = [0, 1];
-  for (const ring of rings) {
-    for (let i = 0; i < ring.length; i++) {
-      const c = ring[i];
-      const d = ring[(i + 1) % ring.length];
+  for (const shadow of rings) {
+    const local = shadow.ring.map((point) => toLocal(origin, point));
+    for (let i = 0; i < local.length; i++) {
+      const c = local[i];
+      const d = local[(i + 1) % local.length];
       if (c === undefined || d === undefined) continue;
       const t = parameterOnSegment(a, b, c, d);
       if (t !== null) parameters.push(t);
     }
   }
   parameters.sort((p, q) => p - q);
-  let shaded = 0;
+  let sunLength = 0;
   let previous = 0;
   for (const t of parameters) {
     if (t - previous < 1e-10) continue;
     const mid = (previous + t) / 2;
     const x = a.x + (b.x - a.x) * mid;
     const y = a.y + (b.y - a.y) * mid;
-    if (rings.some((ring) => pointInRing(ring, x, y))) shaded += (t - previous) * length;
+    sunLength += (t - previous) * length * pointSunFraction(fromLocal(origin, { x, y }), shadows);
     previous = t;
   }
-  return shaded;
+  return sunLength;
 }
 
 export function edgeSunFraction(edge: Edge, shadows: readonly ShadowPolygon[], sun: SunPosition): number | null {
@@ -373,22 +425,19 @@ export function edgeSunFraction(edge: Edge, shadows: readonly ShadowPolygon[], s
   if (origin === undefined) return null;
   const line = edge.geometry.map((point) => toLocal(origin, point));
   if (line.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) return null;
-  const rings = shadows
-    .filter((shadow) => shadow.ring.length >= 3)
-    .map((shadow) => shadow.ring.map((point) => toLocal(origin, point)));
   let total = 0;
-  let shaded = 0;
+  let sunLength = 0;
   for (let i = 0; i < line.length - 1; i++) {
     const a = line[i];
     const b = line[i + 1];
     if (a === undefined || b === undefined) continue;
     const length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (length === 0) continue;
     total += length;
-    shaded += shadedLength(a, b, rings);
+    sunLength += segmentSunLength(a, b, origin, shadows);
   }
   if (!(total > 0)) return null;
-  const fraction = 1 - shaded / total;
-  return Math.min(1, Math.max(0, fraction));
+  return Math.min(1, Math.max(0, sunLength / total));
 }
 
 export function transmittance(point: LngLat): number {

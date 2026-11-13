@@ -36,7 +36,17 @@ function pilot(): PilotData {
     ],
   };
   const graph: GraphFile = { version: 1, area: "bgc", edges: [] };
-  return { manifest: manifest(), graph, tiles: [], buildings: [building], roads: [], land: [], places: [], attribution: manifest().attribution };
+  return {
+    manifest: manifest(),
+    graph,
+    tiles: [],
+    buildings: [building],
+    trees: [],
+    roads: [],
+    land: [],
+    places: [],
+    attribution: manifest().attribution,
+  };
 }
 
 function fakeView(): MapView & {

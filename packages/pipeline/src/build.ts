@@ -3,13 +3,15 @@ import { ATTRIBUTION, HEIGHT_SOURCES, REFERENCE_DAYS, SLOT_GRID, type BBox as Co
 import { REFERENCE_DATES } from "@shadeway/shade-model";
 import { basemapGeoJson } from "./basemap.js";
 import { buildCasters } from "./casters.js";
-import { interpolationCheck } from "./config.js";
+import { interpolationCheck, routeMetricsCheck } from "./config.js";
 import type { BBox } from "./edges.js";
 import { footpathPieces, type OsmWay } from "./edges.js";
 import { graphFromPieces } from "./graph.js";
 import type { Overrides } from "./overrides.js";
-import { shadeEdges } from "./shade-tiles.js";
+import { shadiestSunMinutes, tilesFromShadeFiles } from "./metrics.js";
+import { noonEdgeChangeShare, shadeEdges } from "./shade-tiles.js";
 import type { BuildingRecord } from "./sample.js";
+import type { TreeCaster } from "@shadeway/contract";
 
 export type BuildReport = {
   area: string;
@@ -29,6 +31,14 @@ export type BuildReport = {
     edges: number;
     meanAbsoluteError: number | null;
   };
+  canopy?: {
+    crownCount: number;
+    rasterCrowns: number;
+    osmFallbackCrowns: number;
+    noonChangedEdgeShare: number;
+    demoShadiestSunMinutesBefore: number | null;
+    demoShadiestSunMinutesAfter: number | null;
+  };
   basemap: string;
   notes: string[];
 };
@@ -46,6 +56,8 @@ export type BuildInput = {
   extraNotes?: readonly string[];
   places?: readonly { name: string; at: LngLat }[];
   land?: readonly { kind: "park" | "water"; id: string; ring: readonly LngLat[] }[];
+  trees?: readonly TreeCaster[];
+  treeStats?: { rasterCrowns: number; osmFallbackCrowns: number };
 };
 
 export async function buildArea(input: BuildInput): Promise<BuildReport> {
@@ -57,10 +69,22 @@ export async function buildArea(input: BuildInput): Promise<BuildReport> {
     input.overrides,
     input.rasterHeight,
   );
+  const trees = input.trees ?? [];
   const location = boxCenter(input.box);
+  const buildingOnly = trees.length > 0
+    ? shadeEdges({
+        edges: graph.edges,
+        buildings: casters.casters,
+        trees: [],
+        location,
+        date: interpolationCheck.date,
+        minutes: interpolationCheck.minutes,
+      })
+    : null;
   const shaded = shadeEdges({
     edges: graph.edges,
     buildings: casters.casters,
+    trees,
     location,
     date: interpolationCheck.date,
     minutes: interpolationCheck.minutes,
@@ -88,8 +112,36 @@ export async function buildArea(input: BuildInput): Promise<BuildReport> {
       },
     ],
     attribution: ATTRIBUTION,
+    ...(trees.length > 0 ? { canopy: true as const } : {}),
   };
   const graphFile: GraphFile = { version: 1, area: input.area, edges: graph.edges };
+  const canopyMetrics =
+    trees.length > 0
+      ? {
+          crownCount: trees.length,
+          rasterCrowns: input.treeStats?.rasterCrowns ?? 0,
+          osmFallbackCrowns: input.treeStats?.osmFallbackCrowns ?? 0,
+          noonChangedEdgeShare: noonEdgeChangeShare(graph.edges, casters.casters, trees, location),
+          demoShadiestSunMinutesBefore: buildingOnly
+            ? shadiestSunMinutes({
+                graph: graphFile,
+                tiles: tilesFromShadeFiles(buildingOnly.files),
+                from: routeMetricsCheck.from,
+                to: routeMetricsCheck.to,
+                date: routeMetricsCheck.date,
+                minutes: routeMetricsCheck.minutes,
+              })
+            : null,
+          demoShadiestSunMinutesAfter: shadiestSunMinutes({
+            graph: graphFile,
+            tiles: tilesFromShadeFiles(shaded.files),
+            from: routeMetricsCheck.from,
+            to: routeMetricsCheck.to,
+            date: routeMetricsCheck.date,
+            minutes: routeMetricsCheck.minutes,
+          }),
+        }
+      : undefined;
   const report: BuildReport = {
     area: input.area,
     builtAt,
@@ -103,6 +155,7 @@ export async function buildArea(input: BuildInput): Promise<BuildReport> {
     bridgeEdges: graph.bridgeEdges,
     overrideEdges: graph.overrideEdges,
     interpolation: shaded.interpolation,
+    ...(canopyMetrics === undefined ? {} : { canopy: canopyMetrics }),
     basemap: "basemap.geojson",
     notes: [
       "Basemap is basemap.geojson, one static GeoJSON file of the walking graph, building footprints, and OpenStreetMap parks and water. It is not a PMTiles or MVT archive.",
@@ -124,6 +177,7 @@ export async function buildArea(input: BuildInput): Promise<BuildReport> {
       bbox,
       edges: graph.edges,
       buildings: casters.casters,
+      ...(trees.length > 0 ? { trees } : {}),
       ...(input.land === undefined ? {} : { land: input.land }),
     }),
   );
@@ -157,6 +211,16 @@ export function formatBuildReport(report: BuildReport): string {
     `interpolation_mae=${report.interpolation.meanAbsoluteError ?? "none"}`,
     `basemap=${report.basemap}`,
   );
+  if (report.canopy) {
+    lines.push(
+      `canopy_crowns=${report.canopy.crownCount}`,
+      `canopy_raster_crowns=${report.canopy.rasterCrowns}`,
+      `canopy_osm_fallback_crowns=${report.canopy.osmFallbackCrowns}`,
+      `canopy_noon_changed_edge_share=${report.canopy.noonChangedEdgeShare}`,
+      `canopy_demo_shadiest_sun_minutes_before=${report.canopy.demoShadiestSunMinutesBefore ?? "none"}`,
+      `canopy_demo_shadiest_sun_minutes_after=${report.canopy.demoShadiestSunMinutesAfter ?? "none"}`,
+    );
+  }
   return lines.join("\n");
 }
 

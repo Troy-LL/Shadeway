@@ -9,6 +9,12 @@ export function toWebMercator(lon: number, lat: number): { x: number; y: number 
   };
 }
 
+export function fromWebMercator(x: number, y: number): { lon: number; lat: number } {
+  const lon = (x / WGS84_A) * (180 / Math.PI);
+  const lat = (2 * Math.atan(Math.exp(y / WGS84_A)) - Math.PI / 2) * (180 / Math.PI);
+  return { lon, lat };
+}
+
 export function toUtm51N(lon: number, lat: number): { x: number; y: number } {
   const e2 = WGS84_F * (2 - WGS84_F);
   const ep2 = e2 / (1 - e2);

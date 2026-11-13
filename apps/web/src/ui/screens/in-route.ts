@@ -1,4 +1,4 @@
-import { COPY, ROUTE_ESTIMATE_LABEL, formatDistanceM, formatMinutes, formatMinutesInSun } from "../copy";
+import { COPY, TREE_DATA_OUT_OF_DATE, formatDistanceM, formatMinutes, formatMinutesInSun, routeEstimateLabel } from "../copy";
 import { formatDepartureChip } from "../departure-time";
 import type { UiState } from "../types";
 
@@ -26,7 +26,7 @@ export function renderInRouteContent(state: UiState, handlers: InRouteHandlers):
 
   const label = document.createElement("p");
   label.className = "sheet-estimate-label";
-  label.textContent = ROUTE_ESTIMATE_LABEL;
+  label.textContent = routeEstimateLabel(state.canopyLoaded);
 
   const actions = document.createElement("div");
   actions.className = "in-route-actions";
@@ -44,6 +44,13 @@ export function renderInRouteContent(state: UiState, handlers: InRouteHandlers):
   end.addEventListener("click", handlers.onEnd);
 
   actions.append(showRoute, end);
-  container.append(status, sun, totals, label, actions);
+  if (state.canopyLoaded) {
+    const treeAge = document.createElement("p");
+    treeAge.className = "sheet-tree-age-label";
+    treeAge.textContent = TREE_DATA_OUT_OF_DATE;
+    container.append(status, sun, totals, label, treeAge, actions);
+  } else {
+    container.append(status, sun, totals, label, actions);
+  }
   return container;
 }

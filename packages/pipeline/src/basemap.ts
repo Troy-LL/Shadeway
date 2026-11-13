@@ -1,9 +1,10 @@
-import { ATTRIBUTION, type BBox, type Building, type Edge, type LngLat } from "@shadeway/contract";
+import { ATTRIBUTION, type BBox, type Building, type Edge, type LngLat, type TreeCaster } from "@shadeway/contract";
 
 export function basemapGeoJson(input: {
   bbox: BBox;
   edges: readonly Edge[];
   buildings: readonly Building[];
+  trees?: readonly TreeCaster[];
   land?: readonly { kind: "park" | "water"; id: string; ring: readonly LngLat[] }[];
 }): string {
   const features = [
@@ -33,6 +34,25 @@ export function basemapGeoJson(input: {
           geometry: {
             type: "Polygon",
             coordinates: [[...building.footprint, close]],
+          },
+        },
+      ];
+    }),
+    ...(input.trees ?? []).flatMap((tree) => {
+      const close = tree.footprint[0];
+      if (close === undefined) return [];
+      return [
+        {
+          type: "Feature",
+          properties: {
+            kind: "tree",
+            id: tree.id,
+            crownHeightM: tree.crownHeightM,
+            transmittance: tree.transmittance,
+          },
+          geometry: {
+            type: "Polygon",
+            coordinates: [[...tree.footprint, close]],
           },
         },
       ];

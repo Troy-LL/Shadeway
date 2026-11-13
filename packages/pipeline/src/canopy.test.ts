@@ -1,5 +1,17 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { writeArrayBuffer } from "geotiff";
 import { expect, test } from "vitest";
-import { countCanopyPixels } from "./canopy.js";
+import {
+  CANOPY_HEIGHT_THRESHOLD_M,
+  canopyCrownRetention,
+  MAX_CROWN_PATCH_AREA_M2,
+  countCanopyPixels,
+  crownsFromGrid,
+  loadCanopyGrid,
+} from "./canopy.js";
+import { toWebMercator } from "./project.js";
 
 test("canopy count keeps pixels whose centers sit inside the box and are at least 3 m", () => {
   const counts = countCanopyPixels({
@@ -18,3 +30,134 @@ test("canopy count keeps pixels whose centers sit inside the box and are at leas
   });
   expect(counts).toEqual({ pixels: 4, atLeast3m: 3 });
 });
+
+test("vectorizes a synthetic canopy raster above the height threshold", () => {
+  const origin = toWebMercator(121.05, 14.552);
+  const grid = {
+    originX: origin.x,
+    originY: origin.y + 6,
+    pixelSizeX: 1,
+    pixelSizeY: 1,
+    width: 8,
+    height: 8,
+    values: new Uint8Array([
+      0, 0, 0, 0, 0, 0, 0, 0,
+      0, 4, 4, 4, 4, 0, 0, 0,
+      0, 4, 5, 5, 4, 0, 0, 0,
+      0, 4, 5, 5, 4, 0, 0, 0,
+      0, 4, 4, 4, 4, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0, 0,
+    ]),
+    box: { minX: origin.x, minY: origin.y, maxX: origin.x + 8, maxY: origin.y + 8 },
+  };
+  const crowns = crownsFromGrid(grid, 0.35);
+  expect(crowns.length).toBeGreaterThan(0);
+  expect(crowns[0]?.crownHeightM).toBeGreaterThanOrEqual(CANOPY_HEIGHT_THRESHOLD_M);
+});
+
+test("loads a synthetic canopy GeoTIFF from disk", async () => {
+  const origin = toWebMercator(121.05, 14.552);
+  const width = 6;
+  const height = 6;
+  const values = new Float32Array(width * height);
+  for (let row = 0; row < height; row += 1) {
+    for (let col = 0; col < width; col += 1) {
+      values[row * width + col] = row >= 1 && row <= 3 && col >= 1 && col <= 3 ? 5 : 0;
+    }
+  }
+  const metadata = {
+    height,
+    width,
+    ModelPixelScale: [1, 1, 0],
+    ModelTiepoint: [0, 0, 0, origin.x, origin.y + height, 0],
+    GeographicTypeGeoKey: 3857,
+  };
+  const buffer = await writeArrayBuffer(values, metadata);
+  const dir = await mkdtemp(join(tmpdir(), "shadeway-canopy-"));
+  const path = join(dir, "canopy.tif");
+  await writeFile(path, Buffer.from(buffer));
+  const box = { minX: origin.x, minY: origin.y, maxX: origin.x + width, maxY: origin.y + height };
+  const grid = await loadCanopyGrid(path, box);
+  const crowns = crownsFromGrid(grid, 0.35);
+  expect(crowns.length).toBeGreaterThan(0);
+});
+
+test("keeps at least one crown on a flat 60x60 m plateau", () => {
+  const origin = toWebMercator(121.05, 14.552);
+  const size = 60;
+  const values = new Float32Array(size * size).fill(9);
+  const grid = {
+    originX: origin.x,
+    originY: origin.y + size,
+    pixelSizeX: 1,
+    pixelSizeY: 1,
+    width: size,
+    height: size,
+    values,
+    box: { minX: origin.x, minY: origin.y, maxX: origin.x + size, maxY: origin.y + size },
+  };
+  const crowns = crownsFromGrid(grid, 0.35);
+  expect(crowns.length).toBeGreaterThan(0);
+  expect(canopyCrownRetention(grid, crowns)).toBeGreaterThanOrEqual(0.9);
+});
+
+test("checkerboard canopy keeps at least 90% of eligible pixels in crowns", () => {
+  const origin = toWebMercator(121.05, 14.552);
+  const size = 32;
+  const values = new Float32Array(size * size);
+  for (let row = 0; row < size; row += 1) {
+    for (let col = 0; col < size; col += 1) {
+      const block = (Math.floor(row / 4) + Math.floor(col / 4)) % 2 === 0;
+      values[row * size + col] = block ? 5 : 0;
+    }
+  }
+  const grid = {
+    originX: origin.x,
+    originY: origin.y + size,
+    pixelSizeX: 1,
+    pixelSizeY: 1,
+    width: size,
+    height: size,
+    values,
+    box: { minX: origin.x, minY: origin.y, maxX: origin.x + size, maxY: origin.y + size },
+  };
+  const crowns = crownsFromGrid(grid, 0.35);
+  expect(crowns.length).toBeGreaterThan(0);
+  expect(canopyCrownRetention(grid, crowns)).toBeGreaterThanOrEqual(0.9);
+});
+
+test("splits a flat 100x100 m plateau so no crown exceeds 2,000 m2", () => {
+  const origin = toWebMercator(121.05, 14.552);
+  const size = 100;
+  const values = new Float32Array(size * size).fill(9);
+  const grid = {
+    originX: origin.x,
+    originY: origin.y + size,
+    pixelSizeX: 1,
+    pixelSizeY: 1,
+    width: size,
+    height: size,
+    values,
+    box: { minX: origin.x, minY: origin.y, maxX: origin.x + size, maxY: origin.y + size },
+  };
+  const crowns = crownsFromGrid(grid, 0.35);
+  expect(crowns.length).toBeGreaterThan(1);
+  const areas = crowns.map((crown) => crownAreaM2(crown.footprint));
+  expect(Math.max(...areas)).toBeLessThanOrEqual(MAX_CROWN_PATCH_AREA_M2);
+  expect(canopyCrownRetention(grid, crowns)).toBeGreaterThanOrEqual(0.9);
+});
+
+function crownAreaM2(ring: readonly { 0: number; 1: number }[] | readonly [number, number][]): number {
+  if (ring.length < 3) return 0;
+  const mercator = ring.map((point) => toWebMercator(point[0], point[1]));
+  let area = 0;
+  for (let i = 0; i < mercator.length; i += 1) {
+    const a = mercator[i];
+    const b = mercator[(i + 1) % mercator.length];
+    if (!a || !b) continue;
+    area += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(area) / 2;
+}

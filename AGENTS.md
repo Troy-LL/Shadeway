@@ -16,7 +16,7 @@ Commands: `pnpm install`, `pnpm -r typecheck`, `pnpm -r test`. Exact scripts per
 Never:
 - Do not add a backend, database, or runtime call beyond static files.
 - Do not compute shade or draw shadows outside `packages/shade-model`.
-- Do not state an accuracy figure or say "tree" shade until the measured match rate exists.
+- Do not state an accuracy figure or claim field-checked tree shade until the walked match rate exists. The approved pre-check label may mention a satellite tree map (decision 002).
 - Do not edit a package another track owns; change its contract in `packages/contract` instead.
 - Do not commit secrets, raw OSM extracts, or `data/build/`.
 - Do not use a dataset with a non-commercial license.

@@ -379,12 +379,128 @@ describe("edge sun fraction", () => {
     expect(shadeModel.edgeSunFraction(edge([[-20, 5], [30, 5]]), shadows, sun(90, 45))).toBeCloseTo(0.36, 6);
   });
 
+  it("keeps building-only sun when trees are present but do not reach the edge", () => {
+    const shadows = shadeModel.shadowPolygons([building("square", SQUARE)], sun(90, 45));
+    const buildingOnly = shadeModel.edgeSunFraction(edge([[-20, 5], [20, 5]]), shadows, sun(90, 45));
+    const treeFar = shadeModel.treeShadowPolygons(
+      [
+        {
+          id: "far",
+          footprint: SQUARE.map(([e, n]) => lngLat(e + 80, n + 80)),
+          crownHeightM: HEIGHT_M,
+          transmittance: 0.35,
+        },
+      ],
+      sun(90, 45),
+    );
+    const combined = shadeModel.edgeSunFraction(edge([[-20, 5], [20, 5]]), [...shadows, ...treeFar], sun(90, 45));
+    expect(buildingOnly).toBeCloseTo(0.5, 6);
+    expect(combined).toBeCloseTo(buildingOnly!, 6);
+  });
+
+  it("never raises sun when a tree shadow is added on an open edge", () => {
+    const open = edge([[30, 5], [60, 5]]);
+    const clear = shadeModel.edgeSunFraction(open, [], sun(90, 45));
+    const tree = shadeModel.treeShadowPolygons(
+      [
+        {
+          id: "mid",
+          footprint: [
+            lngLat(40, 0),
+            lngLat(50, 0),
+            lngLat(50, 10),
+            lngLat(40, 10),
+          ],
+          crownHeightM: HEIGHT_M,
+          transmittance: 0.35,
+        },
+      ],
+      sun(90, 45),
+    );
+    const shaded = shadeModel.edgeSunFraction(open, tree, sun(90, 45));
+    expect(clear).toBeCloseTo(1, 6);
+    expect(shaded).not.toBeNull();
+    if (shaded === null || clear === null) return;
+    expect(shaded).toBeLessThanOrEqual(clear);
+    expect(shaded).toBeGreaterThan(0.3);
+  });
+
+  it("takes the union of overlapping building and tree shade", () => {
+    const sunNoon = sun(90, 45);
+    const buildingShadows = shadeModel.shadowPolygons([building("b1", SQUARE)], sunNoon);
+    const tree = shadeModel.treeShadowPolygons(
+      [
+        {
+          id: "t1",
+          footprint: SQUARE.map(([e, n]) => lngLat(e, n)),
+          crownHeightM: HEIGHT_M,
+          transmittance: 0.35,
+        },
+      ],
+      sunNoon,
+    );
+    const combined = [...buildingShadows, ...tree];
+    const walk = edge([[2, 5], [8, 5]]);
+    const buildingOnly = shadeModel.edgeSunFraction(walk, buildingShadows, sunNoon);
+    const both = shadeModel.edgeSunFraction(walk, combined, sunNoon);
+    expect(buildingOnly).toBeCloseTo(0, 6);
+    expect(both).toBeCloseTo(0, 6);
+    expect(both).not.toBeGreaterThan(buildingOnly!);
+  });
+
+  it("lowers sun along an edge crossed by a partial tree shadow", () => {
+    const walk = edge([[5, 0], [15, 0]]);
+    const tree = shadeModel.treeShadowPolygons(
+      [
+        {
+          id: "crown",
+          footprint: SQUARE.map(([e, n]) => lngLat(e, n)),
+          crownHeightM: HEIGHT_M,
+          transmittance: 0.35,
+        },
+      ],
+      sun(90, 45),
+    );
+    const open = shadeModel.edgeSunFraction(walk, [], sun(90, 45));
+    const under = shadeModel.edgeSunFraction(walk, tree, sun(90, 45));
+    expect(open).toBeCloseTo(1, 6);
+    expect(under).not.toBeNull();
+    if (under === null) return;
+    expect(under).toBeLessThan(0.85);
+  });
+
   // Decision 002 puts covered and bridge shading in the pipeline, not in this fraction.
   it("leaves a covered edge at its geometric fraction", () => {
     const shadows = shadeModel.shadowPolygons([building("square", SQUARE)], sun(90, 45));
     expect(shadeModel.edgeSunFraction(edge([[-20, 5], [20, 5]], true), shadows, sun(90, 45))).toBeCloseTo(0.5, 6);
     expect(shadeModel.edgeSunFraction(edge([[-20, 5], [20, 5]]), shadows, sun(90, 0))).toBeNull();
     expect(shadeModel.edgeSunFraction(edge([[0, 0]]), shadows, sun(90, 45))).toBeNull();
+  });
+});
+
+describe("tree shadows", () => {
+  it("casts a partial shadow with the configured transmittance", () => {
+    const tree = {
+      id: "tree-1",
+      footprint: SQUARE.map(([east, north]) => lngLat(east, north)),
+      crownHeightM: HEIGHT_M,
+      transmittance: 0.35,
+    };
+    const sunNoon = sun(180, 60);
+    const treeShadow = shadeModel.treeShadowPolygons([tree], sunNoon);
+    expect(treeShadow).toHaveLength(1);
+    expect(treeShadow[0]?.kind).toBe("tree");
+    const ring = treeShadow[0]?.ring ?? [];
+    const shadowPoint = ring[Math.floor(ring.length / 2)] ?? lngLat(5, -8);
+    const buildings = shadeModel.shadowPolygons([building("b1", [[30, 0], [40, 0], [40, 10], [30, 10]])], sunNoon);
+    const onlyTree = shadeModel.pointSunFraction(shadowPoint, treeShadow);
+    expect(onlyTree).toBeCloseTo(0.35, 5);
+    const buildingShadow = buildings[0]?.ring[0];
+    if (buildingShadow === undefined) throw new Error("missing building shadow");
+    const combined = [...buildings, ...treeShadow];
+    expect(shadeModel.pointSunFraction(buildingShadow, combined)).toBe(0);
+    const clear = lngLat(-10, 5);
+    expect(shadeModel.pointSunFraction(clear, combined)).toBe(1);
   });
 });
 

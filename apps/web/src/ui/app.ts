@@ -52,6 +52,7 @@ function emptyUiState(): UiState {
     start: null,
     end: null,
     timePickerOpen: false,
+    canopyLoaded: false,
   };
 }
 
@@ -416,7 +417,10 @@ export function createUiApp(
       const sunDown = sun.elevationDeg <= 0;
       const outsideHours = state.departureIsNow && !shadeDepartureAvailable(manilaNowMinutes());
       const shadeUnavailable = sunDown || outsideHours;
-      const cards = cardsFromResults(routed, pilot.graph, pilot.tiles, { shadeCoverageUnavailable: shadeUnavailable });
+      const cards = cardsFromResults(routed, pilot.graph, pilot.tiles, {
+        shadeCoverageUnavailable: shadeUnavailable,
+        canopy: pilot.manifest.canopy === true,
+      });
       if (cards.length === 0) {
         map.setStartMarker(null);
         map.setEndMarker(null);
@@ -504,7 +508,14 @@ export function createUiApp(
       livePilot = pilot;
       routeClient = createRouteClient();
       const slot = snapToNowSlot(manilaNowMinutes());
-      setState({ places: pilot.places, slot, departureIsNow: true, status: "normal", screen: "search" });
+      setState({
+        places: pilot.places,
+        slot,
+        departureIsNow: true,
+        status: "normal",
+        screen: "search",
+        canopyLoaded: pilot.manifest.canopy === true,
+      });
       document.documentElement.dataset.places = String(pilot.places.length);
       const harness = import.meta.env.DEV || import.meta.env.VITE_CAPTURE === "1";
       if (harness) {

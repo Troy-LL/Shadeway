@@ -7,7 +7,7 @@ Flat 2D Shadeway UI per ENG-021. Mobile-first at 390x844, desktop side panel at 
 - Full-bleed map. One sheet. One primary action per screen.
 - Fewest words. Numbers over sentences.
 - Sun and shade are never told by color alone.
-- The label "Building-only estimate, no trees" appears once per Compare and In-route sheet. See [decisions/002-honest-data-labels.md](decisions/002-honest-data-labels.md).
+- The route estimate label appears once per Compare and In-route sheet. See [decisions/002-honest-data-labels.md](decisions/002-honest-data-labels.md).
 - No simulated navigation progress, no off-route reroute, no Balanced card, no 3D view.
 
 ## Layout
@@ -27,7 +27,7 @@ Flat 2D Shadeway UI per ENG-021. Mobile-first at 390x844, desktop side panel at 
 - Header: departure chip ("Leave now" or "Leave HH:MM") and Estimate badge.
 - Two route cards: Shadiest (default selected), then Fastest. 88px card: "{n} min in sun" headline, route name, total time and distance, 8px shade strip.
 - Selected card: accent border and check. Map draws the inactive route in grey under the selected route.
-- One sheet label "Building-only estimate, no trees" below the cards. One Start button. Back returns to Search with the same pair.
+- One sheet route-estimate label below the cards. One Start button. Back returns to Search with the same pair.
 - Departure chip opens an in-sheet list: Now, then 06:00–18:00 every 30 minutes.
 - Outside shaded hours or sun down: "Shade estimates available 06:00–18:00". Fastest may show "Fastest walk" with "Shade unavailable" (no sun minutes).
 
@@ -51,4 +51,4 @@ Flat 2D Shadeway UI per ENG-021. Mobile-first at 390x844, desktop side panel at 
 
 ## Copy
 
-Exact strings in `apps/web/src/ui/copy.ts`, including: "Available route", "Shadiest and fastest", "Shade unavailable", "Fastest walk", "Shade estimates available 06:00–18:00", "Route overview · live position unavailable", "Location off", ROUTE_ESTIMATE_LABEL.
+Exact strings in `apps/web/src/ui/copy.ts`, including: "Available route", "Shadiest and fastest", "Shade unavailable", "Fastest walk", "Shade estimates available 06:00–18:00", "Route overview · live position unavailable", "Location off", `routeEstimateLabel`, `TREE_DATA_OUT_OF_DATE`.

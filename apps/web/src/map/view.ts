@@ -10,6 +10,8 @@ import type { RouteDraw, ShadowDraw } from "./scene";
 
 const SHADOW = [20, 32, 43, 255] as const;
 const SHADOW_DARK = [0, 0, 0, 255] as const;
+const TREE_SHADOW = [72, 118, 88, 100] as const;
+const TREE_SHADOW_DARK = [110, 170, 125, 130] as const;
 const EDGE = [20, 32, 43, 255] as const;
 const EDGE_DARK = [255, 255, 255, 255] as const;
 const EDGE_EST = [20, 32, 43, 255] as const;
@@ -80,6 +82,8 @@ export function shadowLayerVisibility(showShadowFill: boolean): Readonly<Record<
     shadows: showShadowFill ? "visible" : "none",
     "shadow-edge": "none",
     "shadow-edge-estimated": showShadowFill ? "visible" : "none",
+    "tree-shadows": showShadowFill ? "visible" : "none",
+    "tree-shadow-edge": showShadowFill ? "visible" : "none",
   };
 }
 
@@ -88,6 +92,8 @@ const SCENE_SOURCES = [
   "shadows",
   "shadow-edge",
   "shadow-edge-estimated",
+  "tree-shadows",
+  "tree-shadow-edge",
   "route-inactive-casing",
   "route-inactive",
   "route-casing",
@@ -193,6 +199,18 @@ export function createMapLibreView(root: HTMLElement): MapView {
       type: "line",
       source: "shadow-edge-estimated",
       paint: { "line-color": rgba(EDGE_EST), "line-width": 1, "line-dasharray": [3, 2] },
+    });
+    map.addLayer({
+      id: "tree-shadows",
+      type: "fill",
+      source: "tree-shadows",
+      paint: { "fill-color": rgba(TREE_SHADOW), "fill-opacity": 0.26 },
+    });
+    map.addLayer({
+      id: "tree-shadow-edge",
+      type: "line",
+      source: "tree-shadow-edge",
+      paint: { "line-color": rgba(TREE_SHADOW), "line-width": 1 },
     });
     map.addLayer({
       id: "route-inactive-casing",
@@ -375,7 +393,7 @@ export function createMapLibreView(root: HTMLElement): MapView {
   return view;
 }
 
-const SHADOW_LAYERS = ["shadows", "shadow-edge", "shadow-edge-estimated"] as const;
+const SHADOW_LAYERS = ["shadows", "shadow-edge", "shadow-edge-estimated", "tree-shadows", "tree-shadow-edge"] as const;
 
 function readMapDiagnostics(map: Map): MapLayerDiagnostics | null {
   const style = map.getStyle();
@@ -402,11 +420,15 @@ function readMapDiagnostics(map: Map): MapLayerDiagnostics | null {
 function applyScene(scene: MapScene): void {
   const map = baseMap;
   if (!map) return;
-  const estimated = scene.shadows.filter((shadow) => shadow.estimated);
-  const measured = scene.shadows.filter((shadow) => !shadow.estimated);
-  setSourceData(map, "shadows", ringsCollection(scene.shadows.map((shadow) => shadow.ring)));
+  const buildingShadows = scene.shadows.filter((shadow) => shadow.kind === "building");
+  const treeShadows = scene.shadows.filter((shadow) => shadow.kind === "tree");
+  const estimated = buildingShadows.filter((shadow) => shadow.estimated);
+  const measured = buildingShadows.filter((shadow) => !shadow.estimated);
+  setSourceData(map, "shadows", ringsCollection(buildingShadows.map((shadow) => shadow.ring)));
   setSourceData(map, "shadow-edge", linesCollection(measured.map((shadow) => shadow.ring)));
   setSourceData(map, "shadow-edge-estimated", linesCollection(estimated.map((shadow) => shadow.ring)));
+  setSourceData(map, "tree-shadows", ringsCollection(treeShadows.map((shadow) => shadow.ring)));
+  setSourceData(map, "tree-shadow-edge", linesCollection(treeShadows.map((shadow) => shadow.ring)));
   setSourceData(map, "buildings", ringsCollection(scene.buildingFootprints));
   const inactive =
     scene.inactiveLine.length >= 2 ? linesCollection([scene.inactiveLine]) : emptyCollection();
@@ -434,6 +456,7 @@ function palette() {
   return {
     dark,
     shadow: dark ? SHADOW_DARK : SHADOW,
+    treeShadow: dark ? TREE_SHADOW_DARK : TREE_SHADOW,
     edge: dark ? EDGE_DARK : EDGE,
     edgeEst: dark ? EDGE_EST_DARK : EDGE_EST,
     sun: dark ? SUN_LINE_DARK : SUN_LINE,
@@ -484,6 +507,13 @@ function paintSceneColors(): void {
   }
   if (map.getLayer("shadow-edge")) {
     map.setPaintProperty("shadow-edge", "line-opacity", 0);
+  }
+  if (map.getLayer("tree-shadows")) {
+    map.setPaintProperty("tree-shadows", "fill-color", rgba(colors.treeShadow));
+    map.setPaintProperty("tree-shadows", "fill-opacity", colors.dark ? 0.34 : 0.26);
+  }
+  if (map.getLayer("tree-shadow-edge")) {
+    map.setPaintProperty("tree-shadow-edge", "line-color", rgba(colors.treeShadow));
   }
   if (map.getLayer("route-inactive-casing")) {
     map.setPaintProperty("route-inactive-casing", "line-color", rgba(INACTIVE_CASING_DARK));

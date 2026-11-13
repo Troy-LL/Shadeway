@@ -92,6 +92,8 @@ export const ATTRIBUTION = [
   "OpenStreetMap contributors, ODbL",
   "Overture Maps Foundation buildings, ODbL",
   "Google Open Buildings 2.5D Temporal, CC BY 4.0",
+  "Meta and WRI 1 m canopy height, CC BY 4.0",
+  "Source imagery for CHM © 2016 Maxar",
 ] as const;
 
 /** Any height not from an OSM `height` tag is an estimate and is drawn with a dashed shadow edge. */
@@ -119,11 +121,26 @@ export interface Building extends BuildingHeight {
   readonly footprint: Ring;
 }
 
+/** A tree crown that casts a partial shadow, per decision 001. */
+export interface TreeCaster {
+  readonly id: string;
+  readonly footprint: Ring;
+  /** Canopy height above the ground in meters. */
+  readonly crownHeightM: number;
+  /** Direct sun fraction under the crown shadow, 0 to 1. */
+  readonly transmittance: number;
+}
+
+export type ShadowCasterKind = "building" | "tree";
+
 export interface ShadowPolygon {
   readonly buildingId: string;
   readonly ring: Ring;
   /** True when the casting building's height is an estimate. */
   readonly estimated: boolean;
+  readonly kind?: ShadowCasterKind;
+  /** Tree crowns only. Direct sun fraction inside the shadow polygon. */
+  readonly transmittance?: number;
 }
 
 /** Integer from 0 to 2^32 - 1. */
@@ -174,6 +191,8 @@ export interface TileManifest {
   readonly tiles: readonly TileRef[];
   /** Attribution strings the map must show, per decision 004. */
   readonly attribution: readonly string[];
+  /** True when tiles include tree canopy shade. */
+  readonly canopy?: boolean;
 }
 
 export const ROUTE_WEIGHTS = ["fastest", "balanced", "shadiest"] as const;
@@ -206,7 +225,11 @@ export interface ShadeModel {
   estimateHeight(input: HeightInput): BuildingHeight;
   /** Each footprint swept along the sun azimuth by height divided by tan(elevation). */
   shadowPolygons(buildings: readonly Building[], sun: SunPosition): ShadowPolygon[];
+  /** Tree crown shadows with partial transmittance under the polygon. */
+  treeShadowPolygons(trees: readonly TreeCaster[], sun: SunPosition): ShadowPolygon[];
   isInShadow(point: LngLat, shadows: readonly ShadowPolygon[]): boolean;
+  /** Direct sun at a point from shadow polygons, 0 to 1. */
+  pointSunFraction(point: LngLat, shadows: readonly ShadowPolygon[]): number;
   /** Canopy light pass-through at a point, 0 to 1. Returns 1 until phase two. */
   transmittance(point: LngLat): number;
   /** Share of the edge in direct sun, 0 to 1, or null when it cannot be computed. */
