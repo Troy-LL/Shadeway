@@ -1,6 +1,6 @@
 # Shadeway
 
-A walking router that spends less of your walk in the sun. It picks the route with the least time in direct sun, using shadows from buildings and, later, tree canopy. The map feels like Apple Maps: 3D first, with a 2D view that draws the shadows along the route you chose.
+A walking router that spends less of your walk in the sun. It picks the route with the least time in direct sun, using shadows from buildings and, later, tree canopy. The map is a flat 2D view that draws the shadows along the route you chose.
 
 Pilot area: Bonifacio Global City (BGC), Taguig, Metro Manila. A walkable grid of towers, covered walkways, and tree-lined streets.
 
@@ -12,7 +12,7 @@ Met:
 
 - The Data sources section holds the 9 measured BGC counts.
 - The 3 pilot walks each return Fastest, Balanced, and Shadiest. At noon on 2026-10-26 the covered High Street walk and the Uptown footbridge are 0 min in sun because the way is tagged covered or bridge in OSM, not because a shadow pass found shade. The tree-lined High Street walk is 6 minutes in sun on Fastest (6 min, 518 m) and 4 minutes in sun on Shadiest (9 min, 784 m).
-- The label "Building-only estimate, no trees" and the Estimate badge are on each Compare card and on the In-route sheet.
+- The label "Building-only estimate, no trees" appears once per Compare and In-route sheet, with the Estimate badge in the Compare header.
 - Router p95 is under 500 ms. Headless Chromium, 4x CPU throttle, one warmup, then 20 worker round trips per walk at noon. p95 is the 19th sorted sample: covered walk 18.9 ms, tree-lined walk 19.1 ms, footbridge 15.0 ms.
 - Search, Compare, and In-route run on the pilot tiles. Screenshots are in `apps/web/screenshots/`.
 - Fixture shadow polygons and tile bytes agree inside 0.10 sun fraction (`packages/pipeline` build test, compared to 0.01).
@@ -27,7 +27,7 @@ A hand comparison of the 3 walks with undercover.ph is in [docs/prior-art-compar
 
 ## Read this before trusting a route
 
-Phase one is a **building-only estimate, no trees**, and BGC has many trees that phase one ignores. Shade in BGC is also made by things OpenStreetMap can miss or map as plain footpaths: covered walkways, skybridges, overpasses, and awnings. Every Compare card and the In-route sheet carry the label "Building-only estimate, no trees". No accuracy figure is published until 20 walked segments have been scored. See [docs/decisions/002-honest-data-labels.md](docs/decisions/002-honest-data-labels.md).
+Phase one is a **building-only estimate, no trees**, and BGC has many trees that phase one ignores. Shade in BGC is also made by things OpenStreetMap can miss or map as plain footpaths: covered walkways, skybridges, overpasses, and awnings. Each Compare sheet and In-route overview show that label once. No accuracy figure is published until 20 walked segments have been scored. See [docs/decisions/002-honest-data-labels.md](docs/decisions/002-honest-data-labels.md).
 
 ## Who it is for
 

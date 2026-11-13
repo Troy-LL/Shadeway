@@ -9,6 +9,7 @@ describe("live search", () => {
     createUiApp(root, createNoopMapController());
     expect(root.textContent).not.toContain("18 min");
     expect(root.textContent).not.toContain("4 min in sun");
-    expect(root.querySelector<HTMLInputElement>(".search-field")?.placeholder).toBe("Where to?");
+    const fields = root.querySelectorAll<HTMLInputElement>(".search-field");
+    expect(fields[1]?.placeholder).toBe("Where to?");
   });
 });

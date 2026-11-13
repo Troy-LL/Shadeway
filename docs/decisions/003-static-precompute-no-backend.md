@@ -13,7 +13,7 @@ We will precompute shade offline in CI and serve static files.
 - Language and tooling: TypeScript in a pnpm monorepo.
 - Offline pipeline: builds the OpenStreetMap walking graph, joins building footprints with heights and a canopy raster, calls `packages/shade-model`, and writes tiled static files. One byte per edge per slot.
 - Client: A* in a Web Worker over the loaded tiles. No server, no API, no database.
-- Map: MapLibre GL JS for the basemap, deck.gl for 3D buildings, sun lighting, and route and shadow layers.
+- Map: MapLibre GL JS for the basemap, route line, and shadow polygons.
 - Hosting: local static files. The dev server serves the web bundle and the pilot build. There is no Cloudflare Pages deploy.
 - The pipeline runs on the machine that serves the app (`build:pilot`). A manual workflow can run the same command and store the output as an artifact.
 

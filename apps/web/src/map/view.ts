@@ -1,23 +1,31 @@
-import { AmbientLight, DirectionalLight, LightingEffect, type Layer } from "@deck.gl/core";
-import { PathStyleExtension } from "@deck.gl/extensions";
-import { GeoJsonLayer } from "@deck.gl/layers";
-import { MapboxOverlay } from "@deck.gl/mapbox";
-import type { Building, LngLat } from "@shadeway/contract";
+import type { LngLat } from "@shadeway/contract";
 import { GeoJSONSource, Map, Marker, setWorkerUrl, type EaseToOptions } from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 setWorkerUrl(maplibreWorkerUrl);
+import { applyFlatMapGestures, readGestureDiagnostics } from "./map-gestures";
+import { pilotVeilGeoJson } from "./veil-geojson";
 import type { RouteDraw, ShadowDraw } from "./scene";
 
-const BUILDING = [214, 206, 194, 255] as const;
-const BUILDING_LINE = [196, 190, 180, 255] as const;
+const SHADOW = [20, 32, 43, 255] as const;
+const SHADOW_DARK = [0, 0, 0, 255] as const;
+const EDGE = [20, 32, 43, 255] as const;
+const EDGE_DARK = [255, 255, 255, 255] as const;
+const EDGE_EST = [20, 32, 43, 255] as const;
+const EDGE_EST_DARK = [255, 255, 255, 255] as const;
 const SUN_LINE = [245, 165, 36, 255] as const;
+const SUN_LINE_DARK = [255, 184, 77, 255] as const;
 const SHADE_LINE = [31, 122, 140, 255] as const;
-const CASING = [255, 255, 255, 235] as const;
-const TICK = [31, 122, 140, 255] as const;
-
-const dash = new PathStyleExtension({ dash: true });
+const SHADE_LINE_DARK = [58, 160, 179, 255] as const;
+const CASING_LIGHT = [20, 32, 43, 255] as const;
+const CASING_DARK = [255, 255, 255, 255] as const;
+const INACTIVE_LIGHT = [122, 131, 140, 255] as const;
+const INACTIVE_DARK = [163, 172, 182, 255] as const;
+const INACTIVE_CASING_DARK = [20, 24, 29, 255] as const;
+const BUILDING_LIGHT = [228, 222, 211, 255] as const;
+const BUILDING_DARK = [34, 39, 46, 255] as const;
+const TICK = SHADE_LINE;
 
 export interface CameraMove {
   readonly pitch: number;
@@ -26,19 +34,28 @@ export interface CameraMove {
   readonly zoom?: number;
 }
 
-export interface DeckScene {
-  readonly buildings: readonly Building[];
-  readonly extruded: boolean;
+export interface MapScene {
   readonly shadows: readonly ShadowDraw[];
   readonly route: RouteDraw;
-  readonly light: readonly [number, number, number];
+  readonly inactiveLine: readonly LngLat[];
+  readonly buildingFootprints: readonly (readonly LngLat[])[];
+  readonly showShadowFill: boolean;
+}
+
+export interface MapLayerDiagnostics {
+  readonly pitch: number;
+  readonly bearing: number;
+  readonly maxPitch: number;
+  readonly dragRotateEnabled: boolean;
+  readonly touchRotationEnabled: boolean;
+  readonly layerVisibility: Readonly<Record<string, string>>;
+  readonly symbolLayerIds: readonly string[];
 }
 
 export interface MapView {
   setRoads(roads: readonly (readonly LngLat[])[]): void;
   setLand(areas: readonly { kind: "park" | "water"; ring: readonly LngLat[] }[]): void;
-  setLabels(labels: readonly { name: string; at: LngLat }[]): void;
-  setDeck(scene: DeckScene): void;
+  setScene(scene: MapScene): void;
   ease(camera: CameraMove, durationMs: number): void;
   fit(
     bounds: readonly [number, number, number, number],
@@ -46,10 +63,39 @@ export interface MapView {
     camera: CameraMove,
     durationMs: number,
   ): void;
-  setMarkers(start: LngLat | null, end: LngLat | null): void;
+  setMarkers(
+    start: LngLat | null,
+    end: LngLat | null,
+    labels?: { readonly startLabel?: string; readonly endLabel?: string },
+  ): void;
   setOutline(ring: readonly LngLat[] | null): void;
+  setPilotVeil(bbox: readonly [number, number, number, number] | null): void;
+  setRouteMidpointLabels(labels: readonly { readonly text: string; readonly at: LngLat }[]): void;
   onTap(listener: (position: LngLat) => void): void;
+  mapDiagnostics(): MapLayerDiagnostics | null;
 }
+
+export function shadowLayerVisibility(showShadowFill: boolean): Readonly<Record<string, "visible" | "none">> {
+  return {
+    shadows: showShadowFill ? "visible" : "none",
+    "shadow-edge": "none",
+    "shadow-edge-estimated": showShadowFill ? "visible" : "none",
+  };
+}
+
+const SCENE_SOURCES = [
+  "buildings",
+  "shadows",
+  "shadow-edge",
+  "shadow-edge-estimated",
+  "route-inactive-casing",
+  "route-inactive",
+  "route-casing",
+  "route-sun",
+  "route-shade-casing",
+  "route-shade",
+  "route-ticks",
+] as const;
 
 export function createMapLibreView(root: HTMLElement): MapView {
   const map = new Map({
@@ -60,16 +106,17 @@ export function createMapLibreView(root: HTMLElement): MapView {
       layers: [{ id: "land", type: "background", paint: { "background-color": "#F3EFE8" } }],
     },
     center: [121.051, 14.5522],
-    zoom: 15.6,
-    pitch: 38,
-    bearing: -28,
+    zoom: 15.2,
+    pitch: 0,
+    bearing: 0,
     attributionControl: false,
-    maxPitch: 67,
+    maxPitch: 0,
+    dragRotate: false,
+    pitchWithRotate: false,
+    touchPitch: false,
     fadeDuration: 0,
   });
   baseMap = map;
-  const overlay = new MapboxOverlay({ interleaved: false, layers: [] });
-  map.addControl(overlay);
   let loaded = false;
   const queue: Array<() => void> = [];
   const whenLoaded = (job: () => void) => {
@@ -77,10 +124,22 @@ export function createMapLibreView(root: HTMLElement): MapView {
     else queue.push(job);
   };
   map.once("load", () => {
+    applyFlatMapGestures(map);
     map.addSource("parks", { type: "geojson", data: emptyCollection() });
     map.addSource("water", { type: "geojson", data: emptyCollection() });
     map.addSource("roads", { type: "geojson", data: emptyCollection() });
     map.addSource("outline", { type: "geojson", data: emptyCollection() });
+    map.addSource("pilot-veil", { type: "geojson", data: emptyCollection() });
+    for (const id of SCENE_SOURCES) {
+      map.addSource(id, { type: "geojson", data: emptyCollection() });
+    }
+    map.addLayer({
+      id: "pilot-veil",
+      type: "fill",
+      source: "pilot-veil",
+      paint: { "fill-color": "#F3EFE8", "fill-opacity": 0.6 },
+      layout: { visibility: "none" },
+    });
     map.addLayer({
       id: "parks",
       type: "fill",
@@ -111,7 +170,81 @@ export function createMapLibreView(root: HTMLElement): MapView {
       source: "outline",
       paint: { "line-color": "#0A84FF", "line-width": 2, "line-dasharray": [1.5, 1.2] },
     });
+    map.addLayer({
+      id: "buildings",
+      type: "fill",
+      source: "buildings",
+      paint: { "fill-color": rgba(BUILDING_LIGHT), "fill-opacity": 1 },
+    });
+    map.addLayer({
+      id: "shadows",
+      type: "fill",
+      source: "shadows",
+      paint: { "fill-color": rgba(SHADOW), "fill-opacity": 0.18 },
+    });
+    map.addLayer({
+      id: "shadow-edge",
+      type: "line",
+      source: "shadow-edge",
+      paint: { "line-color": rgba(EDGE), "line-width": 1 },
+    });
+    map.addLayer({
+      id: "shadow-edge-estimated",
+      type: "line",
+      source: "shadow-edge-estimated",
+      paint: { "line-color": rgba(EDGE_EST), "line-width": 1, "line-dasharray": [3, 2] },
+    });
+    map.addLayer({
+      id: "route-inactive-casing",
+      type: "line",
+      source: "route-inactive",
+      layout: { "line-cap": "round", "line-join": "round", visibility: "none" },
+      paint: { "line-color": rgba(INACTIVE_CASING_DARK), "line-width": 7 },
+    });
+    map.addLayer({
+      id: "route-inactive",
+      type: "line",
+      source: "route-inactive",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": rgba(INACTIVE_LIGHT), "line-width": 4 },
+    });
+    map.addLayer({
+      id: "route-casing",
+      type: "line",
+      source: "route-casing",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": rgba(CASING_LIGHT), "line-width": 11 },
+    });
+    map.addLayer({
+      id: "route-sun",
+      type: "line",
+      source: "route-sun",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": rgba(SUN_LINE), "line-width": 8 },
+    });
+    map.addLayer({
+      id: "route-shade-casing",
+      type: "line",
+      source: "route-shade-casing",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": rgba(CASING_LIGHT), "line-width": 8 },
+    });
+    map.addLayer({
+      id: "route-shade",
+      type: "line",
+      source: "route-shade",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": rgba(SHADE_LINE), "line-width": 5 },
+    });
+    map.addLayer({
+      id: "route-ticks",
+      type: "line",
+      source: "route-ticks",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": rgba(TICK), "line-width": 3 },
+    });
     paintBase();
+    paintSceneColors();
     loaded = true;
     for (const job of queue) job();
     queue.length = 0;
@@ -120,14 +253,13 @@ export function createMapLibreView(root: HTMLElement): MapView {
 
   let startMarker: Marker | null = null;
   let endMarker: Marker | null = null;
-  let labelMarkers: Marker[] = [];
-  let labelKey = "";
-  let lastScene: DeckScene | null = null;
+  let midpointMarkers: Marker[] = [];
+  let lastScene: MapScene | null = null;
   const theme = window.matchMedia("(prefers-color-scheme: dark)");
   const repaint = () => {
     paintBase();
-    if (!lastScene) return;
-    overlay.setProps({ effects: [lighting(lastScene.light)], layers: layersFor(lastScene) });
+    paintSceneColors();
+    if (lastScene) applyScene(lastScene);
   };
   theme.addEventListener("change", repaint);
 
@@ -140,20 +272,6 @@ export function createMapLibreView(root: HTMLElement): MapView {
         if (isGeoJsonSource(parkSource)) parkSource.setData(ringsCollection(parks));
         const waterSource = map.getSource("water");
         if (isGeoJsonSource(waterSource)) waterSource.setData(ringsCollection(water));
-      });
-    },
-    setLabels(labels) {
-      const key = labels.map((label) => `${label.name}@${label.at[0]},${label.at[1]}`).join(";");
-      if (key === labelKey) return;
-      labelKey = key;
-      whenLoaded(() => {
-        for (const marker of labelMarkers) marker.remove();
-        labelMarkers = labels.map((label) => {
-          const element = document.createElement("div");
-          element.className = "shadeway-place-label";
-          element.textContent = label.name;
-          return new Marker({ element, anchor: "center" }).setLngLat([label.at[0], label.at[1]]).addTo(map);
-        });
       });
     },
     setRoads(roads) {
@@ -170,34 +288,63 @@ export function createMapLibreView(root: HTMLElement): MapView {
         if (isGeoJsonSource(source)) source.setData(data);
       });
     },
-    setDeck(scene) {
+    setScene(scene) {
       lastScene = scene;
-      overlay.setProps({
-        effects: [lighting(scene.light)],
-        layers: layersFor(scene),
-      });
+      whenLoaded(() => applyScene(scene));
     },
     ease(camera, durationMs) {
       whenLoaded(() => map.easeTo(easeOptions(camera, durationMs)));
     },
     fit(bounds, padding, camera, durationMs) {
-      whenLoaded(() => map.fitBounds(
-        [
-          [bounds[0], bounds[1]],
-          [bounds[2], bounds[3]],
-        ],
-        {
-          padding,
-          duration: durationMs,
-          pitch: camera.pitch,
-          bearing: camera.bearing,
-          maxZoom: camera.pitch > 0 ? 16.6 : 17,
-        },
-      ));
+      whenLoaded(() => {
+        const container = map.getContainer();
+        if (!container.isConnected || container.clientWidth < 2 || container.clientHeight < 2) return;
+        const inset = clampFitPadding(padding, container.clientWidth, container.clientHeight);
+        if (!inset) return;
+        try {
+          map.fitBounds(
+            [
+              [bounds[0], bounds[1]],
+              [bounds[2], bounds[3]],
+            ],
+            {
+              padding: inset,
+              duration: durationMs,
+              pitch: 0,
+              bearing: camera.bearing,
+              maxZoom: 17,
+            },
+          );
+        } catch {
+          // fitBounds can fail when padding exceeds the map or the map is torn down mid-frame.
+        }
+      });
     },
-    setMarkers(start, end) {
-      startMarker = placeMarker(map, startMarker, start, "start");
-      endMarker = placeMarker(map, endMarker, end, "end");
+    setMarkers(start, end, labels) {
+      startMarker = placeMarker(map, startMarker, start, "start", labels?.startLabel);
+      endMarker = placeMarker(map, endMarker, end, "end", labels?.endLabel);
+    },
+    setPilotVeil(bbox) {
+      const data = bbox === null ? emptyCollection() : pilotVeilGeoJson(bbox);
+      whenLoaded(() => {
+        const source = map.getSource("pilot-veil");
+        if (isGeoJsonSource(source)) source.setData(data);
+        if (map.getLayer("pilot-veil")) {
+          map.setLayoutProperty("pilot-veil", "visibility", bbox === null ? "none" : "visible");
+        }
+        paintPilotVeil();
+      });
+    },
+    setRouteMidpointLabels(labels) {
+      whenLoaded(() => {
+        for (const marker of midpointMarkers) marker.remove();
+        midpointMarkers = labels.map((label) => {
+          const element = document.createElement("div");
+          element.className = "shadeway-route-tag";
+          element.textContent = label.text;
+          return new Marker({ element, anchor: "center" }).setLngLat([label.at[0], label.at[1]]).addTo(map);
+        });
+      });
     },
     setOutline(ring) {
       const data =
@@ -221,19 +368,79 @@ export function createMapLibreView(root: HTMLElement): MapView {
     onTap(listener) {
       map.on("click", (event) => listener([event.lngLat.lng, event.lngLat.lat]));
     },
+    mapDiagnostics() {
+      return readMapDiagnostics(map);
+    },
   };
   return view;
+}
+
+const SHADOW_LAYERS = ["shadows", "shadow-edge", "shadow-edge-estimated"] as const;
+
+function readMapDiagnostics(map: Map): MapLayerDiagnostics | null {
+  const style = map.getStyle();
+  if (!style) return null;
+  const layerVisibility: Record<string, string> = {};
+  for (const id of SHADOW_LAYERS) {
+    if (!map.getLayer(id)) continue;
+    const visibility = map.getLayoutProperty(id, "visibility");
+    layerVisibility[id] = visibility === "none" ? "none" : "visible";
+  }
+  const symbolLayerIds = style.layers.filter((layer) => layer.type === "symbol").map((layer) => layer.id);
+  const gestures = readGestureDiagnostics(map);
+  return {
+    pitch: gestures.pitch,
+    bearing: gestures.bearing,
+    maxPitch: gestures.maxPitch,
+    dragRotateEnabled: gestures.dragRotateEnabled,
+    touchRotationEnabled: gestures.touchRotationEnabled,
+    layerVisibility,
+    symbolLayerIds,
+  };
+}
+
+function applyScene(scene: MapScene): void {
+  const map = baseMap;
+  if (!map) return;
+  const estimated = scene.shadows.filter((shadow) => shadow.estimated);
+  const measured = scene.shadows.filter((shadow) => !shadow.estimated);
+  setSourceData(map, "shadows", ringsCollection(scene.shadows.map((shadow) => shadow.ring)));
+  setSourceData(map, "shadow-edge", linesCollection(measured.map((shadow) => shadow.ring)));
+  setSourceData(map, "shadow-edge-estimated", linesCollection(estimated.map((shadow) => shadow.ring)));
+  setSourceData(map, "buildings", ringsCollection(scene.buildingFootprints));
+  const inactive =
+    scene.inactiveLine.length >= 2 ? linesCollection([scene.inactiveLine]) : emptyCollection();
+  setSourceData(map, "route-inactive", inactive);
+  setSourceData(map, "route-casing", linesCollection([...scene.route.sunny, ...scene.route.shaded]));
+  setSourceData(map, "route-sun", linesCollection(scene.route.sunny));
+  setSourceData(map, "route-shade-casing", linesCollection(scene.route.shaded));
+  setSourceData(map, "route-shade", linesCollection(scene.route.shaded));
+  setSourceData(map, "route-ticks", linesCollection(scene.route.ticks));
+  const visibility = shadowLayerVisibility(scene.showShadowFill);
+  for (const [id, state] of Object.entries(visibility)) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", state);
+  }
+}
+
+type GeoJsonData = ReturnType<typeof ringsCollection> | ReturnType<typeof linesCollection> | ReturnType<typeof emptyCollection>;
+
+function setSourceData(map: Map, id: string, data: GeoJsonData): void {
+  const source = map.getSource(id);
+  if (isGeoJsonSource(source)) source.setData(data);
 }
 
 function palette() {
   const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   return {
     dark,
-    building: (dark ? [68, 72, 78, 255] : BUILDING) as [number, number, number, number],
-    buildingLine: (dark ? [96, 102, 110, 255] : BUILDING_LINE) as [number, number, number, number],
-    shadow: [20, 32, 43, dark ? 32 : 46] as [number, number, number, number],
-    sun: (dark ? [255, 184, 77, 255] : SUN_LINE) as [number, number, number, number],
-    shade: (dark ? [58, 160, 179, 255] : SHADE_LINE) as [number, number, number, number],
+    shadow: dark ? SHADOW_DARK : SHADOW,
+    edge: dark ? EDGE_DARK : EDGE,
+    edgeEst: dark ? EDGE_EST_DARK : EDGE_EST,
+    sun: dark ? SUN_LINE_DARK : SUN_LINE,
+    shade: dark ? SHADE_LINE_DARK : SHADE_LINE,
+    building: dark ? BUILDING_DARK : BUILDING_LIGHT,
+    casing: dark ? CASING_DARK : CASING_LIGHT,
+    inactive: dark ? INACTIVE_DARK : INACTIVE_LIGHT,
     land: dark ? "#14181d" : "#F3EFE8",
     park: dark ? "#243028" : "#D5E4CF",
     water: dark ? "#1C3344" : "#C5D8EA",
@@ -242,10 +449,18 @@ function palette() {
   };
 }
 
+function paintPilotVeil(): void {
+  const map = baseMap;
+  if (!map?.getLayer("pilot-veil")) return;
+  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  map.setPaintProperty("pilot-veil", "fill-color", dark ? "#14181d" : "#f3efe8");
+}
+
 function paintBase(): void {
   const colors = palette();
   const map = baseMap;
   if (!map) return;
+  paintPilotVeil();
   if (map.getLayer("land")) map.setPaintProperty("land", "background-color", colors.land);
   if (map.getLayer("parks")) map.setPaintProperty("parks", "fill-color", colors.park);
   if (map.getLayer("water")) map.setPaintProperty("water", "fill-color", colors.water);
@@ -253,139 +468,39 @@ function paintBase(): void {
   if (map.getLayer("roads-casing")) map.setPaintProperty("roads-casing", "line-color", colors.roadCasing);
 }
 
+function paintSceneColors(): void {
+  const colors = palette();
+  const map = baseMap;
+  if (!map) return;
+  if (map.getLayer("buildings")) map.setPaintProperty("buildings", "fill-color", rgba(colors.building));
+  if (map.getLayer("shadows")) {
+    map.setPaintProperty("shadows", "fill-color", rgba(colors.shadow));
+    map.setPaintProperty("shadows", "fill-opacity", colors.dark ? 0.3 : 0.18);
+  }
+  if (map.getLayer("shadow-edge")) map.setPaintProperty("shadow-edge", "line-color", rgba(colors.edge));
+  if (map.getLayer("shadow-edge-estimated")) {
+    map.setPaintProperty("shadow-edge-estimated", "line-color", colors.dark ? "#ffffff" : "#14202b");
+    map.setPaintProperty("shadow-edge-estimated", "line-opacity", colors.dark ? 0.25 : 0.35);
+  }
+  if (map.getLayer("shadow-edge")) {
+    map.setPaintProperty("shadow-edge", "line-opacity", 0);
+  }
+  if (map.getLayer("route-inactive-casing")) {
+    map.setPaintProperty("route-inactive-casing", "line-color", rgba(INACTIVE_CASING_DARK));
+    map.setLayoutProperty("route-inactive-casing", "visibility", colors.dark ? "visible" : "none");
+  }
+  if (map.getLayer("route-inactive")) map.setPaintProperty("route-inactive", "line-color", rgba(colors.inactive));
+  if (map.getLayer("route-casing")) map.setPaintProperty("route-casing", "line-color", rgba(colors.casing));
+  if (map.getLayer("route-shade-casing")) map.setPaintProperty("route-shade-casing", "line-color", rgba(colors.casing));
+  if (map.getLayer("route-sun")) map.setPaintProperty("route-sun", "line-color", rgba(colors.sun));
+  if (map.getLayer("route-shade")) map.setPaintProperty("route-shade", "line-color", rgba(colors.shade));
+  if (map.getLayer("route-ticks")) map.setPaintProperty("route-ticks", "line-color", rgba(colors.shade));
+}
+
 let baseMap: Map | null = null;
 
-function layersFor(scene: DeckScene): Layer[] {
-  const colors = palette();
-  const estimated = scene.shadows.filter((shadow) => shadow.estimated);
-  const measured = scene.shadows.filter((shadow) => !shadow.estimated);
-  const flat = !scene.extruded;
-  const ribbon = [...scene.route.sunny, ...scene.route.shaded];
-  const casingLines = scene.extruded ? ribbon : scene.route.sunny;
-  return [
-    polygonLayer("shadows", scene.shadows.map((shadow) => shadow.ring), colors.shadow, flat),
-    lineLayer("shadow-edge", measured.map((shadow) => shadow.ring), [20, 32, 43, colors.dark ? 40 : 55], 1, false, flat),
-    lineLayer("shadow-edge-estimated", estimated.map((shadow) => shadow.ring), [20, 32, 43, colors.dark ? 70 : 90], 1, true, flat),
-    ...(scene.buildings.length > 0
-      ? [
-          new GeoJsonLayer({
-            id: "buildings",
-            data: buildingCollection(scene.buildings),
-            stroked: false,
-            filled: true,
-            extruded: scene.extruded,
-            wireframe: false,
-            getElevation: (feature: { properties?: { heightM?: number } }) => feature.properties?.heightM ?? 0,
-            getFillColor: colors.building,
-            getLineColor: colors.buildingLine,
-            getLineWidth: 1,
-            lineWidthUnits: "pixels",
-            material: {
-              ambient: SCENE_LIGHT.materialAmbient,
-              diffuse: SCENE_LIGHT.materialDiffuse,
-              shininess: 10,
-              specularColor: [255, 248, 236],
-            },
-          }),
-        ]
-      : []),
-    lineLayer("route-ink", casingLines, [20, 32, 43, 230], scene.extruded ? 22 : 14, false, true, true),
-    lineLayer("route-casing", casingLines, [...CASING], scene.extruded ? 16 : 12, false, true, true),
-    lineLayer("route-sun", scene.route.sunny, colors.sun, scene.extruded ? 10 : 8, false, true, true),
-    lineLayer("route-shade-casing", scene.extruded ? [] : scene.route.shaded, [...CASING], 7, false, true, true),
-    lineLayer("route-shade", scene.route.shaded, colors.shade, scene.extruded ? 8 : 5, false, true, true),
-    lineLayer("route-ticks", scene.route.ticks, [...TICK], 3, false, true, true),
-  ];
-}
-
-const SCENE_LIGHT = {
-  ambientColor: [255, 244, 228] as [number, number, number],
-  ambientIntensity: 1,
-  sunColor: [255, 236, 204] as [number, number, number],
-  sunIntensity: 0.55,
-  materialAmbient: 0.82,
-  materialDiffuse: 0.35,
-};
-
-function lighting(direction: readonly [number, number, number]): LightingEffect {
-  const sunUp = direction[2] < 0;
-  return new LightingEffect({
-    ambient: new AmbientLight({ color: SCENE_LIGHT.ambientColor, intensity: SCENE_LIGHT.ambientIntensity }),
-    sun: new DirectionalLight({
-      color: SCENE_LIGHT.sunColor,
-      intensity: sunUp ? SCENE_LIGHT.sunIntensity : 0,
-      direction: [direction[0], direction[1], direction[2]],
-    }),
-  });
-}
-
-function buildingCollection(buildings: readonly Building[]) {
-  return {
-    type: "FeatureCollection" as const,
-      features: buildings.flatMap((building) => {
-      const close = building.footprint[0];
-      if (!close) return [];
-      return [
-        {
-          type: "Feature" as const,
-          properties: { heightM: building.heightM, id: building.id },
-          geometry: {
-            type: "Polygon" as const,
-            coordinates: [positions([...building.footprint, close])],
-          },
-        },
-      ];
-    }),
-  };
-}
-
-function polygonLayer(
-  id: string,
-  rings: readonly (readonly LngLat[])[],
-  color: [number, number, number, number],
-  flat: boolean,
-): GeoJsonLayer {
-  return new GeoJsonLayer({
-    id,
-    data: ringsCollection(rings),
-    stroked: false,
-    filled: true,
-    extruded: false,
-    getFillColor: color,
-    parameters: flat ? { depthCompare: "always" } : { depthCompare: "less-equal" },
-  });
-}
-
-function lineLayer(
-  id: string,
-  lines: readonly (readonly LngLat[])[],
-  color: [number, number, number, number],
-  width: number,
-  dashed: boolean,
-  flat: boolean,
-  onTop = false,
-): GeoJsonLayer {
-  return new GeoJsonLayer({
-    id,
-    data: linesCollection(lines),
-    stroked: true,
-    filled: false,
-    getLineColor: color,
-    getLineWidth: width,
-    lineWidthUnits: "pixels",
-    lineWidthMinPixels: onTop ? width : dashed ? 1 : width,
-    lineCapRounded: onTop,
-    lineJointRounded: onTop,
-    getElevation: flat ? 0 : 8,
-    parameters: onTop || flat ? { depthCompare: "always" } : { depthCompare: "less-equal" },
-    ...(dashed
-      ? {
-          extensions: [dash],
-          getDashArray: [3, 2] as [number, number],
-          dashJustified: true,
-        }
-      : {}),
-  });
+function rgba(color: readonly [number, number, number, number]): string {
+  return `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${color[3] / 255})`;
 }
 
 function ringsCollection(rings: readonly (readonly LngLat[])[]) {
@@ -420,9 +535,33 @@ function positions(line: readonly LngLat[]): [number, number][] {
   return line.map((point) => [point[0], point[1]]);
 }
 
+export function clampFitPadding(
+  padding: { readonly top: number; readonly right: number; readonly bottom: number; readonly left: number },
+  width: number,
+  height: number,
+): { top: number; right: number; bottom: number; left: number } | null {
+  const maxVertical = Math.max(0, height - 2);
+  const maxHorizontal = Math.max(0, width - 2);
+  if (padding.top + padding.bottom >= maxVertical || padding.left + padding.right >= maxHorizontal) {
+    const scale = Math.min(
+      maxVertical / Math.max(1, padding.top + padding.bottom),
+      maxHorizontal / Math.max(1, padding.left + padding.right),
+      1,
+    );
+    if (scale <= 0) return null;
+    return {
+      top: Math.floor(padding.top * scale),
+      right: Math.floor(padding.right * scale),
+      bottom: Math.floor(padding.bottom * scale),
+      left: Math.floor(padding.left * scale),
+    };
+  }
+  return padding;
+}
+
 function easeOptions(camera: CameraMove, durationMs: number): EaseToOptions {
   const options: EaseToOptions = {
-    pitch: camera.pitch,
+    pitch: 0,
     bearing: camera.bearing,
     duration: durationMs,
     essential: true,
@@ -432,12 +571,20 @@ function easeOptions(camera: CameraMove, durationMs: number): EaseToOptions {
   return options;
 }
 
-function placeMarker(map: Map, current: Marker | null, position: LngLat | null, kind: "start" | "end"): Marker | null {
+function placeMarker(
+  map: Map,
+  current: Marker | null,
+  position: LngLat | null,
+  kind: "start" | "end",
+  label?: string,
+): Marker | null {
   current?.remove();
   if (!position) return null;
   const element = document.createElement("div");
   element.className = kind === "start" ? "shadeway-marker shadeway-marker--start" : "shadeway-marker shadeway-marker--end";
-  return new Marker({ element }).setLngLat([position[0], position[1]]).addTo(map);
+  element.setAttribute("role", "img");
+  if (label) element.setAttribute("aria-label", label);
+  return new Marker({ element, anchor: kind === "end" ? "bottom" : "center" }).setLngLat([position[0], position[1]]).addTo(map);
 }
 
 function isGeoJsonSource(source: unknown): source is GeoJSONSource {

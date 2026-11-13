@@ -1,25 +1,24 @@
 import type { LngLat, RouteWeight, SlotIndex } from "@shadeway/contract";
 import type { ConfidenceBadge } from "./copy";
 
-export type SheetDetent = "peek" | "half" | "full";
+export type SheetDetent = "peek" | "half";
 
 export type UiScreen = "search" | "compare" | "in-route";
+
+export type FieldFocus = "from" | "to";
 
 export type UiStatus =
   | "normal"
   | "loading-tiles"
   | "no-route"
   | "outside-pilot"
-  | "night"
+  | "shade-unavailable"
   | "offline"
   | "tile-failed";
 
 export interface ShadeSegment {
-  /** Start along the route, 0 to 1. */
   readonly from: number;
-  /** End along the route, 0 to 1. */
   readonly to: number;
-  /** True when the stretch is in direct sun. */
   readonly sunny: boolean;
 }
 
@@ -31,13 +30,14 @@ export interface PlacePick {
 export interface RouteCardModel {
   readonly weight: RouteWeight;
   readonly totalMinutes: number;
-  readonly sunMinutes: number;
+  readonly sunMinutes: number | null;
   readonly segments: readonly ShadeSegment[];
   readonly confidence: ConfidenceBadge;
   readonly geometry: readonly LngLat[];
   readonly distanceM: number;
   readonly edgeKey: string;
   readonly note?: string;
+  readonly shadeUnavailable?: boolean;
 }
 
 export interface UiState {
@@ -45,15 +45,18 @@ export interface UiState {
   readonly detent: SheetDetent;
   readonly status: UiStatus;
   readonly selectedWeight: RouteWeight;
+  readonly preferredWeight: RouteWeight;
   readonly slot: SlotIndex;
   readonly departureIsNow: boolean;
   readonly routes: readonly RouteCardModel[];
   readonly locationDenied: boolean;
-  readonly minutesRemaining: number;
-  readonly sunMinutesRemaining: number;
-  readonly offRoute: boolean;
-  readonly navigationLine: string;
-  readonly recents: readonly string[];
+  readonly tripMinutes: number;
+  readonly tripSunMinutes: number | null;
+  readonly tripDistanceM: number;
+  readonly fromQuery: string;
+  readonly toQuery: string;
+  readonly focusedField: FieldFocus;
+  readonly editingField: boolean;
   readonly query: string;
   readonly places: readonly PlacePick[];
   readonly start: PlacePick | null;

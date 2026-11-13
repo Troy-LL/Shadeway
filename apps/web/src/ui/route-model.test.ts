@@ -10,7 +10,7 @@ import {
 } from "@shadeway/contract";
 import { describe, expect, it } from "vitest";
 import { COPY } from "./copy";
-import { cardsFromResults, segmentsForRoute } from "./route-model";
+import { cardsFromResults, displayedRoutes, segmentsForRoute } from "./route-model";
 
 function tile(day: ReferenceDay, ids: number[], fractions: readonly (number | null)[]): SunTile {
   const sun = new Uint8Array(ids.length * SLOT_GRID.count);
@@ -79,6 +79,42 @@ describe("route shade strip", () => {
     expect(segments[0]?.to).toBeCloseTo(0.25);
   });
 
+  it("leaves sun minutes unset when shade coverage is unavailable", () => {
+    const tiles = REFERENCE_DAYS.map((day) => tile(day, [2], [1]));
+    const cards = cardsFromResults(
+      {
+        fastest: result("fastest", [2]),
+        balanced: result("balanced", [2]),
+        shadiest: result("shadiest", [1]),
+      },
+      graph,
+      tiles,
+      { shadeCoverageUnavailable: true },
+    );
+    expect(cards.every((card) => card.sunMinutes === null)).toBe(true);
+    expect(cards.every((card) => card.shadeUnavailable)).toBe(true);
+  });
+
+  it("keeps one fastest walk in state when shade is unavailable", () => {
+    const tiles = REFERENCE_DAYS.map((day) => tile(day, [2], [0]));
+    const cards = cardsFromResults(
+      {
+        fastest: result("fastest", [2]),
+        balanced: result("balanced", [2]),
+        shadiest: result("shadiest", [2]),
+      },
+      graph,
+      tiles,
+      { shadeCoverageUnavailable: true },
+    );
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.weight).toBe("fastest");
+    expect(cards[0]?.sunMinutes).toBeNull();
+    expect(cards[0]?.shadeUnavailable).toBe(true);
+    expect(cards[0]?.note).not.toBe(COPY.shadiestAndFastest);
+    expect(displayedRoutes({ status: "shade-unavailable", routes: cards })).toEqual(cards);
+  });
+
   it("says so when the shadiest walk is the fastest walk", () => {
     const tiles = REFERENCE_DAYS.map((day) => tile(day, [2], [0]));
     const same = cardsFromResults(
@@ -90,10 +126,10 @@ describe("route shade strip", () => {
       graph,
       tiles,
     );
-    expect(same.find((card) => card.weight === "shadiest")?.note).toBe(COPY.sameRouteAsFastest);
-    expect(same.find((card) => card.weight === "fastest")?.note).toBeUndefined();
-    expect(same.find((card) => card.weight === "shadiest")?.totalMinutes).toBe(2);
-    expect(same.find((card) => card.weight === "shadiest")?.sunMinutes).toBe(1);
+    expect(same).toHaveLength(1);
+    expect(same[0]?.note).toBe(COPY.shadiestAndFastest);
+    expect(same[0]?.totalMinutes).toBe(2);
+    expect(same[0]?.sunMinutes).toBe(1);
 
     const split = cardsFromResults(
       {

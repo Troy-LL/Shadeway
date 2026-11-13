@@ -28,10 +28,10 @@ export function renderStatusBlock(state: UiState, onTryAgain?: () => void): HTML
       msg.textContent = COPY.outsidePilot;
       return msg;
     }
-    case "night": {
+    case "shade-unavailable": {
       const msg = document.createElement("p");
       msg.className = "status-message status-message--secondary";
-      msg.textContent = COPY.sunIsDown;
+      msg.textContent = COPY.shadeHours;
       return msg;
     }
     case "offline": {

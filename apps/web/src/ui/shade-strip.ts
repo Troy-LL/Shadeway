@@ -9,8 +9,10 @@ export function renderShadeStrip(segments: readonly ShadeSegment[]): HTMLElement
   for (const segment of segments) {
     const span = document.createElement("span");
     span.className = segment.sunny ? "shade-strip__sun" : "shade-strip__shade";
-    const width = (segment.to - segment.from) * 100;
+    const raw = (segment.to - segment.from) * 100;
+    const width = !segment.sunny && raw > 0 && raw < 1 ? 1 : raw;
     span.style.flexBasis = `${width}%`;
+    if (!segment.sunny && raw > 0 && raw < 1) span.style.minWidth = "1px";
     bar.append(span);
   }
 

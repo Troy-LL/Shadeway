@@ -1,11 +1,11 @@
 import type { MapController } from "../map/controller";
 
-export type { MapController, MapViewMode, RouteGeometry } from "../map/controller";
+export type { MapController, RouteGeometry } from "../map/controller";
 
 export function createNoopMapController(): MapController {
   return {
     setRoute() {},
-    setViewMode() {},
+    setAlternateRoute() {},
     setSlot() {},
     fitRoute() {},
     followPosition() {},
@@ -13,11 +13,18 @@ export function createNoopMapController(): MapController {
     setStartMarker() {},
     setEndMarker() {},
     setPilotBox() {},
+    setRouteMidpointLabels() {},
     whenReady() {
       return Promise.resolve(null);
     },
     subscribeMapTap() {
       return () => {};
+    },
+    mapDiagnostics() {
+      return null;
+    },
+    async reloadPilot() {
+      return null;
     },
   };
 }

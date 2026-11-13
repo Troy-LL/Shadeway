@@ -1,20 +1,19 @@
-import { COPY, PILOT_DESTINATIONS } from "../copy";
-import { renderTimeScrubber } from "../time-scrubber";
-import type { PlacePick, UiState } from "../types";
+import { COPY } from "../copy";
+import type { FieldFocus, PlacePick, UiState } from "../types";
 import { renderStatusBlock } from "./status";
 
 export interface SearchHandlers {
-  readonly onQuery: (query: string) => void;
+  readonly onFocusField: (field: FieldFocus) => void;
+  readonly onFromQuery: (query: string) => void;
+  readonly onToQuery: (query: string) => void;
   readonly onPick: (place: PlacePick) => void;
-  readonly onDestination: (label: string) => void;
-  readonly onLeaveNow: () => void;
-  readonly onSlotChange: (slot: number) => void;
-  readonly onSnapNow: () => void;
+  readonly onSwap: () => void;
+  readonly onTryAgain: () => void;
 }
 
 const PILOT_RANK = new Map<string, number>([
-  [PILOT_DESTINATIONS.bonifacioHighStreet.toLowerCase(), 0],
-  [PILOT_DESTINATIONS.marketMarket.toLowerCase(), 1],
+  ["bonifacio high street", 0],
+  ["market! market!", 1],
 ]);
 
 export function matchPlaces(places: readonly PlacePick[], query: string): readonly PlacePick[] {
@@ -23,118 +22,188 @@ export function matchPlaces(places: readonly PlacePick[], query: string): readon
   return places
     .filter((place) => place.name.toLowerCase().includes(needle))
     .sort((a, b) => rankPlace(a.name) - rankPlace(b.name) || a.name.localeCompare(b.name))
-    .slice(0, 6);
+    .slice(0, 3);
 }
 
 function rankPlace(name: string): number {
   return PILOT_RANK.get(name.toLowerCase()) ?? 2;
 }
 
-export function renderSearchContent(state: UiState, handlers: SearchHandlers): HTMLElement {
-  const container = document.createElement("div");
-  container.className = "search-screen";
+function restingPlaces(places: readonly PlacePick[]): readonly PlacePick[] {
+  return [...places].sort((a, b) => rankPlace(a.name) - rankPlace(b.name) || a.name.localeCompare(b.name)).slice(0, 5);
+}
 
-  const status = renderStatusBlock(state);
-  if (status && state.status !== "no-route" && state.status !== "outside-pilot") {
-    container.append(status);
-    return container;
-  }
-  if (status) container.append(status);
+export function suggestionPlaces(state: UiState, query: string): readonly PlacePick[] {
+  if (!state.editingField) return restingPlaces(state.places);
+  const trimmed = query.trim();
+  if (!trimmed) return restingPlaces(state.places);
+  return matchPlaces(state.places, trimmed);
+}
 
-  if (state.start) {
-    const from = document.createElement("p");
-    from.className = "search-picked";
-    from.textContent = state.start.name;
-    container.append(from);
-  }
+function activePickName(state: UiState): string {
+  if (state.focusedField === "from") return state.start?.name.trim() ?? "";
+  return state.end?.name.trim() ?? "";
+}
 
-  const field = document.createElement("input");
-  field.className = "search-field";
-  field.type = "search";
-  field.placeholder = COPY.whereTo;
-  field.setAttribute("aria-label", COPY.whereTo);
-  field.value = state.query;
-  field.addEventListener("input", () => handlers.onQuery(field.value));
-  field.addEventListener("keydown", (event) => {
+function showNoMatchingPlace(state: UiState, query: string, matches: readonly PlacePick[]): boolean {
+  const trimmed = query.trim();
+  if (!state.editingField || !trimmed || matches.length > 0) return false;
+  return trimmed !== activePickName(state);
+}
+
+export interface SearchScreenMount {
+  readonly root: HTMLElement;
+  readonly fields: HTMLElement;
+  readonly from: HTMLInputElement;
+  readonly to: HTMLInputElement;
+  readonly suggest: HTMLElement;
+  readonly noMatch: HTMLElement;
+  readonly statusSlot: HTMLElement;
+  readonly shimmer: HTMLElement;
+}
+
+export function createSearchScreen(handlers: SearchHandlers): SearchScreenMount {
+  const root = document.createElement("div");
+  root.className = "search-screen";
+
+  const statusSlot = document.createElement("div");
+  statusSlot.className = "search-screen__status";
+
+  const fields = document.createElement("div");
+  fields.className = "search-fields";
+  const stack = document.createElement("div");
+  stack.className = "search-fields__stack";
+
+  const from = document.createElement("input");
+  from.className = "search-field";
+  from.type = "search";
+  from.id = "search-from";
+  from.setAttribute("aria-label", COPY.from);
+  from.setAttribute("aria-controls", "search-suggestions");
+  from.setAttribute("aria-autocomplete", "list");
+  from.addEventListener("focus", () => handlers.onFocusField("from"));
+  from.addEventListener("input", () => handlers.onFromQuery(from.value));
+
+  const to = document.createElement("input");
+  to.className = "search-field";
+  to.type = "search";
+  to.id = "search-to";
+  to.placeholder = COPY.whereTo;
+  to.setAttribute("aria-label", COPY.to);
+  to.setAttribute("aria-controls", "search-suggestions");
+  to.setAttribute("aria-autocomplete", "list");
+  to.addEventListener("focus", () => handlers.onFocusField("to"));
+  to.addEventListener("input", () => handlers.onToQuery(to.value));
+
+  const swap = document.createElement("button");
+  swap.type = "button";
+  swap.className = "search-swap";
+  swap.setAttribute("aria-label", COPY.swap);
+  swap.textContent = "⇅";
+  swap.addEventListener("click", () => handlers.onSwap());
+
+  const suggest = document.createElement("div");
+  suggest.className = "suggest";
+  suggest.id = "search-suggestions";
+  suggest.setAttribute("role", "listbox");
+  suggest.hidden = true;
+
+  const noMatch = document.createElement("p");
+  noMatch.className = "status-message status-message--secondary";
+  noMatch.textContent = COPY.noMatchingPlace;
+  noMatch.hidden = true;
+
+  const shimmer = document.createElement("div");
+  shimmer.className = "shimmer-row";
+  shimmer.hidden = true;
+
+  stack.append(from, to);
+  fields.append(stack, swap);
+  root.append(statusSlot, fields, suggest, noMatch, shimmer);
+
+  to.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
-    const first = matchPlaces(state.places, field.value)[0];
-    if (!first) return;
     event.preventDefault();
-    handlers.onPick(first);
+    const first = suggest.querySelector<HTMLButtonElement>(".suggest__option");
+    first?.click();
   });
-  container.append(field);
 
-  const matches = matchPlaces(state.places, state.query);
+  return { root, fields, from, to, suggest, noMatch, statusSlot, shimmer };
+}
+
+export function updateSearchScreen(mount: SearchScreenMount, state: UiState, handlers: SearchHandlers): void {
+  mount.statusSlot.replaceChildren();
+  const status = renderStatusBlock(state, handlers.onTryAgain);
+  const blockFields =
+    status !== null &&
+    state.status !== "no-route" &&
+    state.status !== "outside-pilot" &&
+    state.status !== "loading-tiles";
+  if (status) mount.statusSlot.append(status);
+  mount.fields.hidden = blockFields;
+  mount.suggest.hidden = blockFields;
+  mount.noMatch.hidden = blockFields;
+  if (blockFields) {
+    mount.shimmer.hidden = true;
+    return;
+  }
+
+  mount.from.placeholder = COPY.from;
+  if (state.locationDenied) {
+    const note = document.createElement("p");
+    note.className = "search-location-note";
+    note.textContent = COPY.locationOff;
+    mount.statusSlot.append(note);
+  }
+  mount.from.disabled = false;
+  mount.from.classList.toggle("search-field--active", state.focusedField === "from");
+  mount.to.classList.toggle("search-field--active", state.focusedField === "to");
+
+  const fromValue =
+    state.editingField && state.focusedField === "from" ? state.fromQuery : state.fromQuery || state.start?.name || "";
+  const toValue =
+    state.editingField && state.focusedField === "to" ? state.toQuery : state.toQuery || state.end?.name || "";
+  if (document.activeElement !== mount.from) mount.from.value = fromValue;
+  if (document.activeElement !== mount.to) mount.to.value = toValue;
+
+  const query = state.focusedField === "from" ? mount.from.value : mount.to.value;
+  const matches = suggestionPlaces(state, query);
+
+  mount.suggest.replaceChildren();
+  const activeField = state.focusedField === "from" ? mount.from : mount.to;
+  const inactiveField = state.focusedField === "from" ? mount.to : mount.from;
+  inactiveField.setAttribute("aria-expanded", "false");
+  inactiveField.removeAttribute("aria-activedescendant");
   if (matches.length > 0) {
-    const list = document.createElement("div");
-    list.className = "suggest";
-    list.setAttribute("role", "listbox");
-    for (const place of matches) {
+    mount.suggest.hidden = false;
+    mount.suggest.setAttribute("aria-label", state.focusedField === "from" ? COPY.from : COPY.to);
+    let firstId = "";
+    matches.forEach((place, index) => {
       const option = document.createElement("button");
       option.type = "button";
       option.className = "suggest__option";
+      option.id = `search-suggest-${index}`;
       option.textContent = place.name;
+      option.setAttribute("role", "option");
+      option.setAttribute("aria-selected", "false");
+      if (index === 0) firstId = option.id;
       option.addEventListener("click", () => handlers.onPick(place));
-      list.append(option);
-    }
-    container.append(list);
+      mount.suggest.append(option);
+    });
+    activeField.setAttribute("aria-expanded", "true");
+    if (firstId) activeField.setAttribute("aria-activedescendant", firstId);
+  } else {
+    mount.suggest.hidden = true;
+    activeField.setAttribute("aria-expanded", "false");
+    activeField.removeAttribute("aria-activedescendant");
   }
 
-  const chips = document.createElement("div");
-  chips.className = "chip-row";
-  for (const label of [PILOT_DESTINATIONS.bonifacioHighStreet, PILOT_DESTINATIONS.marketMarket]) {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "chip";
-    chip.textContent = label;
-    chip.addEventListener("click", () => handlers.onDestination(label));
-    chips.append(chip);
-  }
-  container.append(chips);
+  mount.noMatch.hidden = !showNoMatchingPlace(state, query, matches);
+  mount.shimmer.hidden = state.status !== "loading-tiles";
+}
 
-  if (state.detent === "full") {
-    const extra = document.createElement("div");
-    extra.className = "chip-row";
-    const leaveNow = document.createElement("button");
-    leaveNow.type = "button";
-    leaveNow.className = "chip";
-    leaveNow.textContent = COPY.leaveNow;
-    leaveNow.setAttribute("data-action", "leave-now");
-    leaveNow.addEventListener("click", handlers.onLeaveNow);
-    extra.append(leaveNow);
-    container.append(extra);
-
-    if (state.timePickerOpen) {
-      container.append(
-        renderTimeScrubber({
-          slot: state.slot,
-          departureIsNow: state.departureIsNow,
-          onSlotChange: handlers.onSlotChange,
-          onSnapNow: handlers.onSnapNow,
-        }),
-      );
-    }
-
-    if (state.recents.length > 0) {
-      const recents = document.createElement("div");
-      recents.className = "recents";
-      const title = document.createElement("p");
-      title.className = "recents__title sr-only";
-      title.textContent = "Recents";
-      const list = document.createElement("div");
-      list.className = "chip-row";
-      for (const recent of state.recents) {
-        const chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = "chip";
-        chip.textContent = recent;
-        chip.addEventListener("click", () => handlers.onDestination(recent));
-        list.append(chip);
-      }
-      recents.append(title, list);
-      container.append(recents);
-    }
-  }
-
-  return container;
+export function renderSearchContent(state: UiState, handlers: SearchHandlers): HTMLElement {
+  const mount = createSearchScreen(handlers);
+  updateSearchScreen(mount, state, handlers);
+  return mount.root;
 }

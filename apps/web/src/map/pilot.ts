@@ -39,6 +39,15 @@ export class PilotDataMissing extends Error {
 }
 
 export async function loadPilot(dataUrl = "/data/bgc/", fetchImpl: typeof fetch = fetch): Promise<PilotData> {
+  try {
+    return await loadPilotOnce(dataUrl, fetchImpl);
+  } catch (error) {
+    if (!(error instanceof PilotDataMissing)) throw error;
+    return loadPilotOnce(dataUrl, fetchImpl);
+  }
+}
+
+async function loadPilotOnce(dataUrl: string, fetchImpl: typeof fetch): Promise<PilotData> {
   const base = dataUrl.endsWith("/") ? dataUrl : `${dataUrl}/`;
   const manifest = await readJson<TileManifest>(fetchImpl, `${base}manifest.json`);
   const basemap = await readJson<Basemap>(fetchImpl, `${base}basemap.geojson`);
