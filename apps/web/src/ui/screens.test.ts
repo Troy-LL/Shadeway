@@ -46,6 +46,28 @@ describe("Compare route cards", () => {
     expect(root.textContent).toContain(COPY.shadeHours);
     document.body.replaceChildren();
   });
+
+  it("shows one Fastest walk card when shade is unavailable, even if two routes are in state", () => {
+    const two = defaultUiState({
+      screen: "compare",
+      detent: "half",
+      status: "shade-unavailable",
+      selectedWeight: "fastest",
+      routes: defaultUiState().routes.map((route) => ({
+        ...route,
+        shadeUnavailable: true,
+        sunMinutes: null,
+        segments: [],
+      })),
+    });
+    const root = renderUiState(two);
+    document.body.append(root);
+    const cards = root.querySelectorAll(".route-card");
+    expect(cards.length).toBe(1);
+    expect(root.textContent).toContain(COPY.fastestWalk);
+    expect(root.textContent).not.toContain(COPY.shadiest);
+    document.body.replaceChildren();
+  });
 });
 
 describe("Status copy", () => {
@@ -70,6 +92,16 @@ describe("Search", () => {
     document.body.append(root);
     expect(root.querySelectorAll(".search-field").length).toBe(2);
     expect(root.querySelector(".search-swap")).toBeTruthy();
+    document.body.replaceChildren();
+  });
+
+  it("keeps the From placeholder and shows Location off as a separate note", () => {
+    const root = renderUiStateById("search-location-denied");
+    document.body.append(root);
+    const from = root.querySelector<HTMLInputElement>("#search-from");
+    expect(from?.placeholder).toBe(COPY.from);
+    expect(from?.placeholder).not.toBe(COPY.locationOff);
+    expect(root.querySelector(".search-location-note")?.textContent).toBe(COPY.locationOff);
     document.body.replaceChildren();
   });
 

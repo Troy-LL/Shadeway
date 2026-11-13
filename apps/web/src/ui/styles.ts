@@ -132,7 +132,7 @@ export const UI_STYLES = `
 }
 
 .shadeway-sheet[data-screen='compare'] {
-  height: min(62dvh, 420px);
+  height: min(62dvh, calc(420px + var(--safe-bottom)));
 }
 
 .shadeway-sheet[data-screen='in-route'] {
@@ -270,6 +270,13 @@ export const UI_STYLES = `
 .search-field::placeholder {
   color: var(--color-placeholder);
   opacity: 1;
+}
+
+.search-location-note {
+  margin: 0;
+  padding: 0;
+  font-size: var(--text-15);
+  color: var(--color-text-secondary);
 }
 
 .search-field--active {

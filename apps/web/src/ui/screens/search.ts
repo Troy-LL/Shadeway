@@ -148,7 +148,13 @@ export function updateSearchScreen(mount: SearchScreenMount, state: UiState, han
     return;
   }
 
-  mount.from.placeholder = state.locationDenied ? COPY.locationOff : COPY.from;
+  mount.from.placeholder = COPY.from;
+  if (state.locationDenied) {
+    const note = document.createElement("p");
+    note.className = "search-location-note";
+    note.textContent = COPY.locationOff;
+    mount.statusSlot.append(note);
+  }
   mount.from.disabled = false;
   mount.from.classList.toggle("search-field--active", state.focusedField === "from");
   mount.to.classList.toggle("search-field--active", state.focusedField === "to");

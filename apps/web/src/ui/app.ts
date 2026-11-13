@@ -1,4 +1,4 @@
-import { isSlotIndex, slotStartMinutes, type LngLat, type RouteWeight } from "@shadeway/contract";
+import { isSlotIndex, slotStartMinutes, type LngLat } from "@shadeway/contract";
 import { shadeModel } from "@shadeway/shade-model";
 import { MAP_SUN_DATE, type MapController } from "../map/controller";
 import type { PilotData } from "../map/pilot";
@@ -10,7 +10,7 @@ import { COPY } from "./copy";
 import { createNoopMapController } from "./controller-stub";
 import { createRouteClient, nearestNode, type RouteClient } from "./route-client";
 import { manilaNowMinutes, shadeDepartureAvailable, snapToNowSlot } from "./departure-time";
-import { cardsFromResults } from "./route-model";
+import { cardsFromResults, displayedRoutes } from "./route-model";
 import { effectiveRouteWeight } from "./route-selection";
 import { moveRouteSelection, renderCompareContent } from "./screens/compare";
 import { renderInRouteContent } from "./screens/in-route";
@@ -98,8 +98,9 @@ export function createUiApp(
 
   const syncMap = () => {
     map.setSlot(state.slot);
-    const selected = state.routes.find((route) => route.weight === state.selectedWeight);
-    const alternate = state.routes.find((route) => route.weight !== state.selectedWeight);
+    const routes = displayedRoutes(state);
+    const selected = routes.find((route) => route.weight === state.selectedWeight) ?? routes[0];
+    const alternate = selected ? routes.find((route) => route.weight !== selected.weight) : undefined;
     const showRoutes = state.screen === "compare" || state.screen === "in-route";
     if (showRoutes && selected && selected.geometry.length >= 2) {
       map.setRoute({ weight: selected.weight, coordinates: selected.geometry });
@@ -120,8 +121,9 @@ export function createUiApp(
     map.followPosition(false);
     if (state.screen === "compare" && state.start && state.end) {
       const labels: { text: string; at: LngLat }[] = [];
-      const labelForWeight = (weight: RouteWeight) => {
-        switch (weight) {
+      const labelForRoute = (route: RouteCardModel) => {
+        if (state.status === "shade-unavailable" || route.shadeUnavailable) return COPY.fastestWalk;
+        switch (route.weight) {
           case "shadiest":
             return COPY.shadiest;
           case "fastest":
@@ -129,18 +131,18 @@ export function createUiApp(
           case "balanced":
             return "Balanced";
           default: {
-            const _exhaustive: never = weight;
+            const _exhaustive: never = route.weight;
             return String(_exhaustive);
           }
         }
       };
       if (selected?.geometry.length) {
         const at = routeMidpoint(selected.geometry);
-        if (at) labels.push({ text: labelForWeight(selected.weight), at });
+        if (at) labels.push({ text: labelForRoute(selected), at });
       }
       if (alternate?.geometry.length) {
         const at = routeMidpoint(alternate.geometry);
-        if (at) labels.push({ text: labelForWeight(alternate.weight), at });
+        if (at) labels.push({ text: labelForRoute(alternate), at });
       }
       map.setRouteMidpointLabels(labels);
     } else {

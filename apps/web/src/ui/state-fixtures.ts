@@ -20,7 +20,7 @@ export const UI_STATE_FIXTURES: Record<string, UiState> = {
       {
         weight: "fastest",
         totalMinutes: 12,
-        sunMinutes: 0,
+        sunMinutes: null,
         segments: [],
         confidence: "Estimate",
         geometry: [],

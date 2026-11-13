@@ -20,7 +20,7 @@ Flat 2D Shadeway UI per ENG-021. Mobile-first at 390x844, desktop side panel at 
 
 - From and To fields with a 44px Swap control. To placeholder "Where to?".
 - Typing filters pilot places (up to three suggestions). Map tap fills the focused field. Both endpoints set opens Compare.
-- Location denied: From stays editable with a "Location off" placeholder; no live GPS fill.
+- Location denied: From stays editable with the "From" placeholder and a separate "Location off" note; no live GPS fill.
 
 ## Compare
 
@@ -41,7 +41,7 @@ Flat 2D Shadeway UI per ENG-021. Mobile-first at 390x844, desktop side panel at 
 
 - Flat basemap, building footprints near the route, optional shadows (fill plus estimated edge only when on; all shadow layers off by default via the Shadows map control), sun/shade route styling per ENG-021 tokens.
 - Phone Search half sheet is `176px` plus `--safe-bottom` on the sheet. Compare and In-route footers use `calc(16px + var(--safe-bottom))`. When the keyboard is open, Compare collapses to a peek line (`compare-peek-summary`) and the sheet tracks `visualViewport` (48px edit margin, keyboard offset on `bottom`).
-- Other phone content stacks: Search peek `96px`, Compare body up to `420px` / `62dvh`, In-route height content-driven up to `62dvh`.
+- Other phone content stacks: Search peek `96px`, Compare sheet `min(62dvh, 420px + safe-bottom)` with a scrolling middle, In-route height content-driven up to `62dvh`.
 - No place-name labels on the map; start and end markers and attribution stay.
 - Pitch and bearing 0; rotation locked.
 

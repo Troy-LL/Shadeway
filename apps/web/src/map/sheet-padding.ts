@@ -14,6 +14,7 @@ export function computeSheetPadding(): { top: number; right: number; bottom: num
   const safeBottom = Number.parseFloat(getComputedStyle(root).getPropertyValue("--safe-bottom")) || 0;
   if (wide) return { top: 32 + safeTop, right: 32, bottom: 32 + safeBottom, left: 416 };
   const rect = sheet instanceof HTMLElement ? sheet.getBoundingClientRect() : null;
-  const sheetHeight = rect ? Math.round(rect.height) : 176;
-  return phoneMapPadding(safeTop, safeBottom, sheetHeight);
+  // Measured height already includes --safe-bottom on the sheet.
+  const sheetHeight = rect ? Math.round(rect.height) : 176 + safeBottom;
+  return phoneMapPadding(safeTop, 0, sheetHeight);
 }

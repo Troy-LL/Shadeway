@@ -13,7 +13,7 @@ import {
   shadeDepartureAvailable,
   slotStartMinutes,
 } from "../departure-time";
-import { compareRoutes } from "../route-model";
+import { displayedRoutes } from "../route-model";
 import { renderShadeStrip } from "../shade-strip";
 import type { RouteCardModel, UiState } from "../types";
 import { renderStatusBlock } from "./status";
@@ -29,11 +29,7 @@ export interface CompareHandlers {
 }
 
 function visibleRoutes(state: UiState): readonly RouteCardModel[] {
-  const routes = compareRoutes(state.routes);
-  if (state.status === "shade-unavailable") {
-    return routes.length > 0 ? routes : state.routes.filter((route) => route.weight === "fastest");
-  }
-  return routes;
+  return displayedRoutes(state);
 }
 
 export function renderCompareContent(state: UiState, handlers: CompareHandlers): HTMLElement {

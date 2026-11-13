@@ -59,12 +59,25 @@ export function compareRoutes(cards: readonly RouteCardModel[]): readonly RouteC
   return cards.filter((card) => card.weight === "shadiest" || card.weight === "fastest");
 }
 
+/** Shade unavailable: one fastest route, shared by cards and the map. */
+export function displayedRoutes(state: { readonly status: string; readonly routes: readonly RouteCardModel[] }): readonly RouteCardModel[] {
+  if (state.status === "shade-unavailable") {
+    const fastest = state.routes.find((route) => route.weight === "fastest") ?? state.routes[0];
+    return fastest ? [fastest] : [];
+  }
+  return compareRoutes(state.routes);
+}
+
 function noteCards(cards: RouteCardModel[], same: boolean): RouteCardModel[] {
+  const shadeUnavailable = cards.some((card) => card.shadeUnavailable);
+  if (shadeUnavailable) {
+    const fastest = cards.find((card) => card.weight === "fastest") ?? cards[0];
+    return fastest ? [{ ...fastest, weight: "fastest" }] : [];
+  }
   if (cards.length === 1) {
     return cards.map((card) => ({ ...card, note: COPY.availableRoute }));
   }
-  const shadeUnavailable = cards.some((card) => card.shadeUnavailable);
-  if (same && cards.length >= 2 && !shadeUnavailable) {
+  if (same && cards.length >= 2) {
     const merged = cards.find((card) => card.weight === "shadiest") ?? cards[0];
     if (!merged) return cards;
     return [{ ...merged, note: COPY.shadiestAndFastest }];

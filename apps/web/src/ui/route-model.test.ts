@@ -10,7 +10,7 @@ import {
 } from "@shadeway/contract";
 import { describe, expect, it } from "vitest";
 import { COPY } from "./copy";
-import { cardsFromResults, segmentsForRoute } from "./route-model";
+import { cardsFromResults, displayedRoutes, segmentsForRoute } from "./route-model";
 
 function tile(day: ReferenceDay, ids: number[], fractions: readonly (number | null)[]): SunTile {
   const sun = new Uint8Array(ids.length * SLOT_GRID.count);
@@ -95,7 +95,7 @@ describe("route shade strip", () => {
     expect(cards.every((card) => card.shadeUnavailable)).toBe(true);
   });
 
-  it("does not merge identical walks when shade is unavailable", () => {
+  it("keeps one fastest walk in state when shade is unavailable", () => {
     const tiles = REFERENCE_DAYS.map((day) => tile(day, [2], [0]));
     const cards = cardsFromResults(
       {
@@ -107,8 +107,12 @@ describe("route shade strip", () => {
       tiles,
       { shadeCoverageUnavailable: true },
     );
-    expect(cards.length).toBe(2);
-    expect(cards.some((card) => card.note === COPY.shadiestAndFastest)).toBe(false);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.weight).toBe("fastest");
+    expect(cards[0]?.sunMinutes).toBeNull();
+    expect(cards[0]?.shadeUnavailable).toBe(true);
+    expect(cards[0]?.note).not.toBe(COPY.shadiestAndFastest);
+    expect(displayedRoutes({ status: "shade-unavailable", routes: cards })).toEqual(cards);
   });
 
   it("says so when the shadiest walk is the fastest walk", () => {
